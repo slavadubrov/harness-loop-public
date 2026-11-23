@@ -1,0 +1,33 @@
+{
+  "id": "003",
+  "parent": "000",
+  "decision": "",
+  "reasons": [],
+  "note": "I added a short checklist to the SQL prompt that asks the model to identify what each result row represents, return only the requested columns, check for double-counting across joins, preserve entities with no activity when requested, and apply ordering in the final query. This targets queries that run successfully but return the wrong rows, columns, or totals, without adding model calls or database probes.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 11,
+      "removed": 1
+    }
+  ],
+  "tree": "4bcc247332b6",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.015391,
+    "seconds": 15.889391709002666,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-23T09:12:32+00:00"
+}

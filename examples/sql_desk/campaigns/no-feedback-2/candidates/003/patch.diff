@@ -1,0 +1,21 @@
+--- a/desk.py
++++ b/desk.py
+@@ -13,7 +13,17 @@
+ 
+ Question: {question}
+ 
+-Reply with the SQL only."""
++Before writing SQL, silently determine what one output row represents and which
++columns the question asks to return. Return those columns in the requested order;
++keep helper columns (such as ranks, sort keys, and join IDs) out of the final
++projection unless requested. Check that joins do not multiply the entities or
++facts being counted or summed: if combining independent one-to-many relationships,
++aggregate each at the required grain before joining. If the question includes
++entities with no matching activity, preserve them and count matching rows rather
++than the NULL-extended row. Put requested ordering in the outermost query.
++
++Reply with one read-only SQLite SELECT statement, optionally using CTEs, and no
++explanation."""
+ 
+ 
+ def answer(question, db, model):

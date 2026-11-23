@@ -1,0 +1,33 @@
+{
+  "id": "002",
+  "parent": "000",
+  "decision": "",
+  "reasons": [],
+  "note": "Added a post-draft check for text literals in SQL comparisons. The harness uses bounded, read-only lookups to check the specific columns used by the draft and asks the model to map missing literals to exact stored values only when there is a clear match. It substitutes only those validated literals, leaving the rest of the SQL unchanged. This targets the status, country, and category mismatches in the development feedback, including wrong counts from negated status filters.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 96,
+      "removed": 2
+    }
+  ],
+  "tree": "3ea1a583dd85",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.099942,
+    "seconds": 78.18940799997654,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-23T08:54:09+00:00"
+}

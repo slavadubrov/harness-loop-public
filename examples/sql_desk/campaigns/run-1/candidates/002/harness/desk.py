@@ -1,0 +1,116 @@
+"""The SQL desk: answer a question about the shop's data with one SQL query.
+
+``answer`` gets the question, the database (``db.schema()`` and ``db.query(sql)``, read
+only) and the model (``model.complete(prompt)``). It returns one SELECT statement; the
+evaluator runs it and compares the rows with the expected ones.
+"""
+
+import json
+import re
+
+PROMPT = """Write one SQLite query that answers the question.
+
+{schema}
+
+Question: {question}
+
+Reply with the SQL only."""
+
+
+def _unfence(reply):
+    fenced = re.search(r"```(?:\w+)?\s*(.*?)```", reply, re.S)
+    return (fenced.group(1) if fenced else reply).strip()
+
+
+_IDENT = r"[a-zA-Z_][a-zA-Z_0-9]*"
+_LITERAL = r"'(?:''|[^'])*'"
+_NON_CODE = re.compile(r"--[^\n]*|/\*[\s\S]*?\*/|\"(?:\"\"|[^\"])*\"|`[^`]*`|\[[^\]]*\]|" + _LITERAL)
+_SOURCE = re.compile(
+    rf"\b(?:FROM|JOIN)\s+({_IDENT})\b"
+    rf"(?:\s+(?:AS\s+)?(?!(?:WHERE|ON|USING|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|"
+    rf"CROSS|NATURAL|GROUP|ORDER|LIMIT|HAVING|UNION|INTERSECT|EXCEPT|WINDOW)\b)({_IDENT}))?",
+    re.I,
+)
+_COMPARISON = re.compile(
+    rf"(?<![\w.])(?:(?P<alias>{_IDENT})\s*\.\s*)?(?P<column>{_IDENT})\s*"
+    rf"(?:(?:==?|<>|!=)\s*(?P<single>{_LITERAL})(?P<nocase>\s+COLLATE\s+NOCASE\b)?"
+    rf"|\b(?:NOT\s+)?IN\s*\(\s*(?P<items>{_LITERAL}(?:\s*,\s*{_LITERAL})*)\s*\))",
+    re.I,
+)
+
+
+def _repair_literals(sql, question, db, model):
+    # Inspect only columns that the draft actually compares to text literals.
+    code = _NON_CODE.sub(lambda m: " " * len(m[0]), sql)
+    sources = {}
+    for table, alias in _SOURCE.findall(code):
+        sources.setdefault((alias or table).lower(), set()).add(table.lower())
+    tables = set().union(*sources.values())
+    domains, edits = {}, []
+    for match in _COMPARISON.finditer(sql):
+        if code[match.start()].isspace():
+            continue
+        alias = match['alias']
+        candidates = sources.get(alias.lower(), set()) if alias else tables
+        if len(candidates) != 1:
+            continue
+        table = next(iter(candidates))
+        column = match['column'].lower()
+        key = (table, column)
+        group = 'single' if match['single'] else 'items'
+        literals = list(re.finditer(_LITERAL, match[group]))
+        if key not in domains:
+            if len(domains) >= 4:
+                continue
+            field = f't."{column}"'
+            try:
+                rows = db.query(f'SELECT DISTINCT {field} COLLATE BINARY FROM "{table}" AS t '
+                                f"WHERE typeof({field}) = 'text' ORDER BY 1 LIMIT 21")
+                values = [row[0] for row in rows]
+                domains[key] = values if len(values) <= 20 and all(
+                    isinstance(value, str) and len(value) <= 80 for value in values
+                ) else []
+            except Exception:
+                domains[key] = []
+        values = domains[key]
+        for literal in literals:
+            value = literal[0][1:-1].replace("''", "'")
+            present = value in values or (match['nocase'] and any(
+                stored.lower() == value.lower() for stored in values
+            ))
+            if values and not present and len(edits) < 6:
+                edits.append((match.start(group) + literal.start(),
+                              match.start(group) + literal.end(), value, key))
+    if not edits:
+        return sql
+
+    options = {str(i): {"column": ".".join(key), "draft_value": value}
+               for i, (_, _, value, key) in enumerate(edits)}
+    stored = {".".join(key): domains[key] for _, _, _, key in edits}
+    context = json.dumps({"entries": options, "stored_values_by_column": stored})
+    if len(context) > 2500:
+        return sql
+    prompt = (
+        "Check the SQL's text literals against the actual database values below. "
+        "For each listed literal, choose an exact stored value only if it represents "
+        "the same concept requested in the question. Omit entries with no clear match "
+        "or whose current value is intentional. Reply only with a JSON object mapping "
+        'entry IDs to replacement strings, or {}. Do not rewrite the SQL.\n\n'
+        f"Question: {question}\nSQL: {sql}\n{context}"
+    )
+    try:
+        replacements = json.loads(_unfence(model.complete(prompt)))
+    except Exception:
+        return sql
+    if isinstance(replacements, dict):
+        for i in reversed(range(len(edits))):
+            start, end, _, key = edits[i]
+            value = replacements.get(str(i))
+            if isinstance(value, str) and value in domains[key] and "\x00" not in value:
+                sql = sql[:start] + "'" + value.replace("'", "''") + "'" + sql[end:]
+    return sql
+
+
+def answer(question, db, model):
+    reply = model.complete(PROMPT.format(schema=db.schema(), question=question))
+    return _repair_literals(_unfence(reply), question, db, model)

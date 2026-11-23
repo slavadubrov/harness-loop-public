@@ -1,0 +1,86 @@
+{
+  "stopped": "no development task fails",
+  "final": "001",
+  "test": {
+    "000": {
+      "success": 0.5833333333333334,
+      "pass^k": 0.5833333333333334,
+      "violations": 0,
+      "cost_per_task": 0.001297851851851852,
+      "latency_p95": 2.865779083018424,
+      "tokens_per_task": 413.6296296296296,
+      "success_ci": [
+        0.4166666666666667,
+        0.75
+      ],
+      "k": 3,
+      "failing": [
+        "test-all-category-buyers",
+        "test-average-cancelled-order",
+        "test-delivered-free-shipping",
+        "test-german-revenue-by-category",
+        "test-kitchen-list-vs-lowest-paid",
+        "test-last-order-cancelled",
+        "test-net-revenue-by-month",
+        "test-olga-meyer-orders",
+        "test-refunds-to-business",
+        "test-reseller-first-order-lag",
+        "test-shipping-by-country",
+        "test-slow-deliveries",
+        "test-sweden-cancellations",
+        "test-top-category-per-month",
+        "test-us-business-customers"
+      ]
+    },
+    "001": {
+      "success": 1.0,
+      "pass^k": 1.0,
+      "violations": 0,
+      "cost_per_task": 0.0018664074074074073,
+      "latency_p95": 3.2872832910215948,
+      "tokens_per_task": 649.6851851851852,
+      "success_ci": [
+        1.0,
+        1.0
+      ],
+      "k": 3,
+      "failing": []
+    },
+    "delta": {
+      "success": [
+        0.4166666666666667,
+        0.25,
+        0.5833333333333334
+      ],
+      "cost_per_task": [
+        0.0005685555555555554,
+        0.0005240185185185185,
+        0.0006166111111111112
+      ],
+      "latency_p95": [
+        0.4215042080031708,
+        0.019546167022781447,
+        0.554927666002186
+      ],
+      "tokens_per_task": [
+        236.0555555555556,
+        231.6018518518519,
+        240.8611111111111
+      ]
+    },
+    "decision": "adopt",
+    "reasons": [
+      "success is higher: +0.250 to +0.583"
+    ],
+    "misses": []
+  },
+  "spent": {
+    "improver_usd": 0.075516,
+    "improver_unknown": 0,
+    "improver_seconds": 56.75776895901072,
+    "eval_usd": 1.01795,
+    "eval_unknown": 0,
+    "eval_seconds": 222.9,
+    "eval_episodes": 684
+  }
+}

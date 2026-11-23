@@ -1,0 +1,33 @@
+{
+  "id": "001",
+  "parent": "000",
+  "decision": "",
+  "reasons": [],
+  "note": "The SQL prompt now includes a bounded sample of short, low-cardinality text values alongside the schema. This should reduce syntactically valid queries that return wrong or empty results because the model guessed how a status, category, or other label was stored. The harness uses at most two read-only inspection queries, makes no extra model calls, and falls back to a schema-only prompt if inspection fails.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 55,
+      "removed": 3
+    }
+  ],
+  "tree": "3c51fb9c4ed3",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.052353,
+    "seconds": 60.42500683298567,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-23T08:59:31+00:00"
+}

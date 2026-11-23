@@ -1,0 +1,30 @@
+{
+  "decision": "inconclusive",
+  "reasons": [
+    "a zero-width success interval does not establish the allowed loss; keep the base"
+  ],
+  "delta": {
+    "success": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "cost_per_task": [
+      4.444444444444504e-06,
+      -1.4814814814814291e-06,
+      1.1296296296296358e-05
+    ],
+    "latency_p95": [
+      -0.22406600002432242,
+      -0.30252495798049495,
+      0.413374916970497
+    ],
+    "tokens_per_task": [
+      0.44444444444440023,
+      -0.14814814814815236,
+      1.129629629629619
+    ]
+  },
+  "episodes": 108,
+  "seconds": 32.6
+}

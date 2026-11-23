@@ -1,0 +1,19 @@
+{
+  "usecase": "sql-desk",
+  "usecase_version": "3",
+  "fingerprint": "9885c76b09063e2e",
+  "split": "val",
+  "frozen": {
+    "model": "gpt-6.2-sol",
+    "endpoint": "https://api.openai.com/v1",
+    "reasoning_effort": "low",
+    "sampling": "API defaults; reasoning_effort=low; seed from the trial number"
+  },
+  "harnesses": [
+    "000"
+  ],
+  "trials": 3,
+  "evaluator": "harness-evals 0.6.0",
+  "started": "2026-11-23T08:58:25+00:00",
+  "finished": "2026-11-23T08:58:57+00:00"
+}

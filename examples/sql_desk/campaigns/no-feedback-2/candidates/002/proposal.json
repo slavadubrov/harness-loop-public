@@ -1,0 +1,33 @@
+{
+  "id": "002",
+  "parent": "000",
+  "decision": "",
+  "reasons": [],
+  "note": "The harness now checks each generated SELECT with a read-only `LIMIT 0` probe and makes one repair attempt only if the check fails. Giving the model SQLite\u2019s error should help it fix malformed SQL, unknown tables or columns, and unsupported functions without adding a second model call for queries that pass. The probe checks whether SQLite can compile the query, not whether it answers the question correctly.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 56,
+      "removed": 4
+    }
+  ],
+  "tree": "44cbb6589780",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.042936,
+    "seconds": 49.02004866700736,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-23T09:10:49+00:00"
+}

@@ -1,0 +1,93 @@
+"""The SQL desk: answer a question about the shop's data with one SQL query.
+
+``answer`` gets the question, the database (``db.schema()`` and ``db.query(sql)``, read
+only) and the model (``model.complete(prompt)``). It returns one SELECT statement; the
+evaluator runs it and compares the rows with the expected ones.
+"""
+
+import json
+import re
+
+PROMPT = """Write one read-only SQLite SELECT query that answers the question.
+
+{schema}
+{examples}
+Question: {question}
+
+Reply with the SQL only."""
+
+_CATEGORY_COLUMN = re.compile(
+    r"(?:^|_)(?:status|state|type|category|channel|method|currency|country|"
+    r"region|segment|tier|brand|unit)(?:_(?:code|name|label))?$"
+)
+_LOOKUP_TABLE = re.compile(r"(?:^|_)(?:categories|brands|countries|regions|currencies)$")
+
+
+def _normalized(name):
+    return re.sub(r"[^a-z0-9]+", "_", re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name).lower())
+
+
+def _identifier(name):
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _value_examples(question, db):
+    """Ground categorical filters with bounded samples, not full value inventories."""
+    try:
+        columns = db.query("""SELECT m.name, c.name
+            FROM sqlite_master AS m JOIN pragma_table_info(m.name) AS c
+            WHERE m.type = 'table' AND m.name NOT GLOB 'sqlite_*'
+            ORDER BY m.name, c.cid""")
+        question_words = set(_normalized(question).split('_')) - {''}
+        candidates = []
+        for table, column in columns:
+            t, c = _normalized(table), _normalized(column)
+            if _CATEGORY_COLUMN.search(c) or (
+                _LOOKUP_TABLE.search(t) and c in {'name', 'label', 'code'}
+            ):
+                relevance = len(question_words.intersection((t + '_' + c).split('_')))
+                candidates.append((-relevance, table, column))
+        fields = [(table, column) for _, table, column in sorted(candidates)[:18]]
+        if not fields:
+            return ''
+
+        probes = []
+        for i, (table, column) in enumerate(fields):
+            probes.append(f"""SELECT {i}, sampled_value FROM (
+                SELECT DISTINCT sampled_value FROM (
+                    SELECT {_identifier(column)} AS sampled_value
+                    FROM {_identifier(table)} LIMIT 256
+                ) WHERE typeof(sampled_value) IN ('text', 'integer', 'real')
+                  AND length(sampled_value) BETWEEN 1 AND 48
+                LIMIT 8
+            )""")
+        rows = db.query(' UNION ALL '.join(probes))
+    except Exception:
+        # A database that does not support the metadata probe still gets the base prompt.
+        return ''
+
+    by_field = {}
+    for i, value in rows:
+        by_field.setdefault(i, []).append(value)
+    lines = []
+    budget = 2400
+    for i, values in by_field.items():
+        table, column = fields[i]
+        line = f'{_identifier(table)}.{_identifier(column)}: {json.dumps(values)}\n'
+        if len(line) <= budget:
+            lines.append(line)
+            budget -= len(line)
+    if not lines:
+        return ''
+    return (
+        '\nObserved categorical values (data examples only; not exhaustive). '
+        'Use these to match stored spellings or codes when relevant:\n' + ''.join(lines)
+    )
+
+
+def answer(question, db, model):
+    schema = db.schema()
+    examples = _value_examples(question, db)
+    reply = model.complete(PROMPT.format(schema=schema, examples=examples, question=question))
+    fenced = re.search(r"```(?:\w+)?\s*(.*?)```", reply, re.S)
+    return (fenced.group(1) if fenced else reply).strip()

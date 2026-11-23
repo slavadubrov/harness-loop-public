@@ -1,0 +1,1 @@
+I added a short SQLite value-semantics checklist to the SQL prompt. It targets queries that run but return wrong rows because a timestamp filter drops part of the last day, integer division truncates a ratio, or a NULL in a NOT IN subquery suppresses unmatched rows. The harness still makes one model call and no database inspection queries.

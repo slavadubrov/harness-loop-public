@@ -1,0 +1,38 @@
+[project]
+name = "harness-loop"
+version = "0.1.0"
+description = "Improve an agent harness in a closed loop with the model held fixed: a program proposes a change, harness-evals scores it, a rule keeps or drops it."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = ["harness-evals"]
+
+[project.scripts]
+harness-loop = "harness_loop.cli:main"
+
+[project.urls]
+Source = "https://github.com/slavadubrov/harness-loop-public"
+
+[dependency-groups]
+dev = ["pytest>=8.3", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+# This revision checks the direction of the sign test for improvements.
+harness-evals = { git = "https://github.com/slavadubrov/harness-evals", rev = "919124f966cd7f6073ef23b70125123d836a2176" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+# Saved campaigns hold candidates exactly as an improver wrote them.
+extend-exclude = ["examples/sql_desk/campaigns", "build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

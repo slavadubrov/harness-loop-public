@@ -1,0 +1,33 @@
+{
+  "id": "002",
+  "parent": "000",
+  "decision": "",
+  "reasons": [],
+  "note": "I updated the SQL prompt to make the model identify what each result row represents and check that joins, aggregates, and ranking preserve that level of detail. This targets queries that run successfully but return inflated totals, omit entities with no matches, rank the wrong rows, or include unrequested columns. The harness still makes one model call and no database inspection queries.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 13,
+      "removed": 0
+    }
+  ],
+  "tree": "c6a12e6b636b",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.01855,
+    "seconds": 18.014338124979986,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-23T09:00:54+00:00"
+}

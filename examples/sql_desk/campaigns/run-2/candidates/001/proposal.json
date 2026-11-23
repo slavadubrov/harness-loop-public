@@ -1,0 +1,33 @@
+{
+  "id": "001",
+  "parent": "000",
+  "decision": "",
+  "reasons": [],
+  "note": "The harness now uses a single read-only probe to find small sets of stored text values and adds them to the SQL prompt. This should fix failures where the model guessed order statuses, country names, or product categories instead of using the database\u2019s actual codes, including in cancellation rates and non-cancelled order counts. The harness still makes one model call and falls back to the schema alone if the probe fails.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 78,
+      "removed": 3
+    }
+  ],
+  "tree": "eba8e62509ad",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.075516,
+    "seconds": 56.75776895901072,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-23T09:04:52+00:00"
+}

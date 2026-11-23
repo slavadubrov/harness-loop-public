@@ -1,0 +1,63 @@
+{
+  "usecase": "sql-desk",
+  "usecase_version": "3",
+  "fingerprints": {
+    "dev": "a32932a9e9d03296",
+    "val": "9885c76b09063e2e",
+    "test": "2f1dc9bd629532d5"
+  },
+  "frozen": {
+    "model": "gpt-6.2-sol",
+    "endpoint": "https://api.openai.com/v1",
+    "reasoning_effort": "low",
+    "sampling": "API defaults; reasoning_effort=low; seed from the trial number"
+  },
+  "trials": {
+    "dev": 3,
+    "val": 3,
+    "test": 3
+  },
+  "level": 0.95,
+  "seed": "8f98ba16d651",
+  "noise": true,
+  "rule": {
+    "gates": {
+      "violations": [
+        "<=",
+        0
+      ],
+      "success": [
+        ">=",
+        0.8
+      ],
+      "latency_p95": [
+        "<=",
+        15.0
+      ]
+    },
+    "guardrails": {
+      "tokens_per_task": [
+        "<=",
+        2500.0
+      ]
+    },
+    "margin": 0.02
+  },
+  "screen": true,
+  "feedback": true,
+  "improver": {
+    "kind": "openai-agent",
+    "model": "gpt-6.2-sol",
+    "url": "https://api.openai.com/v1",
+    "reasoning_effort": "medium",
+    "tools": [
+      "read_file",
+      "edit_file",
+      "write_file",
+      "glob_files",
+      "grep_files"
+    ]
+  },
+  "harness_loop": "0.1.0",
+  "started": "2026-11-23T08:51:42+00:00"
+}
