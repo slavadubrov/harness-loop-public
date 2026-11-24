@@ -5,7 +5,10 @@ description = "Improve an agent harness in a closed loop with the model held fix
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
-dependencies = ["harness-evals"]
+# PyPI has a different package named harness-evals.
+dependencies = [
+    "harness-evals @ git+https://github.com/slavadubrov/harness-evals@919124f966cd7f6073ef23b70125123d836a2176",
+]
 
 [project.scripts]
 harness-loop = "harness_loop.cli:main"
@@ -20,9 +23,8 @@ dev = ["pytest>=8.3", "ruff>=0.6"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv.sources]
-# This revision checks the direction of the sign test for improvements.
-harness-evals = { git = "https://github.com/slavadubrov/harness-evals", rev = "919124f966cd7f6073ef23b70125123d836a2176" }
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
