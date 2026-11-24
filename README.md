@@ -52,7 +52,9 @@ tasks that changed, both come from pairs this check found.
 [`examples/sql_desk/`](examples/sql_desk/) is a complete target. Its harness answers a
 question about a shop's data with one SQL query; the evaluator runs the query and
 compares the rows with a reference query's. The fixed model is OpenAI `gpt-6.2-sol`
-(`reasoning_effort="low"`). The saved campaigns replay without a model:
+(`reasoning_effort="low"`). Use [uv](https://docs.astral.sh/uv/) to regrade the saved
+runs without a model or API key. The first invocation installs dependencies.
+`report` regenerates the campaign's local report and figure, and `show` reads its ledger.
 
 ```bash
 git clone https://github.com/slavadubrov/harness-loop-public
@@ -69,16 +71,30 @@ uv run harness-loop show - examples/sql_desk/campaigns/run-1 002    # the kept c
 | `no-feedback-1`, a control | 3 | 0 | 0.58 | |
 | `no-feedback-2`, a control | 3 | 0 | 0.58 | |
 
-With feedback, the improver found from the development failures that the bare schema hides
-stored enum, country, and category codes (such as `'canceled'`, `'pending_payment'`, `'NLD'`,
-and `'audio_gear'`), and saw why an initial `sqlite_master` probe triggered SQLite authorizer
-violations (`0.00` on dev). `run-1` recovered in Candidate `002` with a post-draft literal check
-and repair loop; `run-2` parsed `db.schema()` directly in Candidate `001` to run a read-only
-`SELECT DISTINCT` probe before drafting (`1.00` on test in one candidate). Without feedback,
-both controls saw the `sqlite_master` candidate hit `0.00` on dev without seeing why, abandoned
-database probing, and spent the rest of their budget on generic prompt checklists and `LIMIT 0`
-syntax checks, keeping nothing. Each campaign's `REPORT.md` has every candidate with its note
-and decision.
+The database stores values such as `pending_payment` and `NLD`. A query that guesses
+`pending` or `Netherlands` can execute successfully and still return the wrong rows.
+All four campaigns proposed looking up stored values on their first attempt.
+
+- In `run-1` and both controls, the first candidate used SQLite's `pragma_table_info`
+  to find text columns. The read-only authorizer blocked the operation initiated by
+  that helper and recorded a violation. All 72 development runs failed, so those
+  candidates were screened out before validation.
+- In `run-1`, the improver saw the development score drop and the current harness's
+  failures on guessed values. Its next candidate checked text literals after drafting
+  the SQL and asked the model to repair missing values only when needed.
+- In `run-2`, the first candidate already used the available schema and a read-only
+  `SELECT` to collect stored values before drafting. Both adopted changes improved
+  nine of 36 validation questions and worsened none.
+- The controls saw their own notes and the unchanged harness. They switched to prompt
+  advice or syntax checks, and none of those candidates was kept.
+
+The two controls also found the underlying problem. The clearest difference appeared
+after the first candidate failed, when the first feedback campaign tried a different
+way to look up the same values. These are four campaigns on one synthetic database.
+See the saved reports for [feedback run 1](examples/sql_desk/campaigns/run-1/REPORT.md),
+[feedback run 2](examples/sql_desk/campaigns/run-2/REPORT.md),
+[control 1](examples/sql_desk/campaigns/no-feedback-1/REPORT.md), and
+[control 2](examples/sql_desk/campaigns/no-feedback-2/REPORT.md).
 
 | In `examples/sql_desk/` | What it is |
 | --- | --- |
@@ -223,8 +239,10 @@ An improver is a function `(workspace) -> Proposal`. Write your own in a few lin
 ## A control: the same improver without feedback
 
 `campaign(..., feedback=False)`, or `--no-feedback`, runs the same loop with the improver
-shown only the harness, your brief and the notes of earlier candidates: no failing tasks,
-no runs, no decisions. Candidates are scored and decided as before. Run it with the same
+shown the current harness, your brief, any reference material and the notes of earlier
+candidates. The loop withholds failing tasks, runs, scores and decisions. The unchanged
+harness can still reveal that a proposal was dropped. Candidates are scored and decided
+as before. Run it with the same
 budget to see what the evaluator's feedback buys over the improver's own reading of the
 code.
 
