@@ -1,0 +1,33 @@
+{
+  "id": "002",
+  "parent": "000",
+  "decision": "",
+  "reasons": [],
+  "note": "I updated the SQL-generation prompt to favor a direct SELECT when it returns the same rows, while keeping CTEs and subqueries where separate aggregation levels, window filters, or other logic require them. All development runs already passed, so this change targets tail latency from generating unnecessary query layers rather than a known correctness failure. The latency effect has not been measured.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 3,
+      "removed": 0
+    }
+  ],
+  "tree": "b1d0725cfb39",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.059488,
+    "seconds": 30.34738125000149,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-25T15:06:10+00:00"
+}

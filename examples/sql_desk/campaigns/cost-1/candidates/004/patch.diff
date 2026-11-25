@@ -1,0 +1,38 @@
+--- a/desk.py
++++ b/desk.py
+@@ -20,19 +20,32 @@
+ _DELIMITER = re.compile(rf'''{_IDENTIFIER}|'(?:[^']|'')*'|[(),]''', re.I)
+ _SCHEMA_FORMAT = re.compile(
+     r'''(?P<verbatim>"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|'(?:[^']|'')*'|--[^\n]*\n?|/\*[\s\S]*?\*/)'''
+-    r'|(?P<table>\s*\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)|\s+',
++    r'|(?P<table>\s*\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)'
++    r'|(?P<constraint>\b(?:PRIMARY\s+KEY|NOT\s+NULL)\b)|\s+',
+     re.I,
+ )
++_CONSTRAINT_LABELS = {'PRIMARY KEY': 'PK', 'NOT NULL': 'NN'}
+ 
+ 
+ def _compact_schema(schema):
+-    # Use one line per table in the prompt, keeping SQL literals and constraints.
++    # Use one line per table and abbreviate repeated constraints in the prompt.
++    used = {}
++
+     def render(match):
+         if match.lastgroup == 'verbatim':
+             return match[0]
++        if match.lastgroup == 'constraint':
++            constraint = ' '.join(match[0].upper().split())
++            label = _CONSTRAINT_LABELS[constraint]
++            used[label] = constraint
++            return label
+         return '\n' if match.lastgroup == 'table' else ' '
+ 
+-    return _SCHEMA_FORMAT.sub(render, schema).strip()
++    compact = _SCHEMA_FORMAT.sub(render, schema).strip()
++    if used:
++        legend = ', '.join(f'{label}={constraint}' for label, constraint in used.items())
++        compact = legend + '\n' + compact
++    return compact
+ 
+ 
+ def _quote(identifier):

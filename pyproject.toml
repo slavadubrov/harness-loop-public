@@ -1,13 +1,13 @@
 [project]
 name = "harness-loop"
-version = "0.1.0"
+version = "0.2.0"
 description = "Improve an agent harness in a closed loop with the model held fixed: a program proposes a change, harness-evals scores it, a rule keeps or drops it."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 # PyPI has a different package named harness-evals.
 dependencies = [
-    "harness-evals @ git+https://github.com/slavadubrov/harness-evals@919124f966cd7f6073ef23b70125123d836a2176",
+    "harness-evals @ git+https://github.com/slavadubrov/harness-evals@0f59b5e7c760062be19d55dc59bf069c8c918d2b",
 ]
 
 [project.scripts]

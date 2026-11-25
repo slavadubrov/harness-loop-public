@@ -38,6 +38,8 @@ from harness_evals import (
     save,
     summarize,
 )
+from harness_evals.compare import COMPARED
+from harness_evals.metrics import LOWER_IS_BETTER, coordinate
 from harness_evals.runner import Adapter
 
 from harness_loop import __version__
@@ -53,12 +55,18 @@ SEEN = (
     " holds every run in full."
 )
 BLIND = "No results of earlier runs are available: improve the harness from its code alone."
+GOAL = (
+    "\n\nThis campaign lowers `{metric}`. Success must not fall and no new critical violation"
+    " may appear{guardrails}. A change that lowers `{metric}` but breaks one of these is dropped."
+)
+# The axes of a frontier, with +1 where higher is better and -1 where lower is better.
+AXES = {"success": 1, "cost_per_task": -1, "latency_p95": -1}
 
 TASK = """# Improve this harness
 
 {brief}
 
-You are one step of an improvement loop. {feedback}
+You are one step of an improvement loop. {feedback}{goal}
 
 Rules:
 
@@ -183,6 +191,9 @@ def campaign(
     test: bool = True,
     noise: bool = True,
     feedback: bool = True,
+    objective: str = "success",
+    seed: Path | str | None = None,
+    frontier: bool = False,
 ) -> dict[str, Any]:
     """Run the loop until it stops, then score the starting and the final harness on the
     test tasks. Returns the result that is also written to ``<out>/result.json``.
@@ -201,6 +212,14 @@ def campaign(
     ``feedback=False`` is a control: the improver gets the harness and the notes of
     earlier candidates, and no result of any run.
 
+    ``objective`` is the metric a step must improve: success by default, or a metric where
+    lower is better, such as ``cost_per_task``, while success, critical violations and the
+    guardrails hold (see harness_evals.decide). With a latency objective the base runs on
+    the validation tasks again next to each candidate. ``seed`` starts the campaign from
+    another harness directory than ``target.seed``. ``frontier=True`` scores on the test
+    tasks every harness that no other beats on success, cost per task and p95 latency
+    (see non_dominated()), and lists them in the result as ``frontier``.
+
     A campaign resumes from its ledger: call it again with the same arguments. After the
     test tasks have been scored it does not step again, because they are no longer unseen.
     An improver that fails (an outage, a spending limit) stops the campaign at once, with
@@ -211,7 +230,12 @@ def campaign(
     for split in n:
         if not target.usecase.split(split):
             raise ValueError(f"the use case has no tasks in split {split!r}")
-    seed_id = tree_id(files(target.seed))
+    paired = (*COMPARED, *target.usecase.guardrails)
+    if objective != "success" and not (objective in LOWER_IS_BETTER and objective in paired):
+        known = ", ".join(m for m in dict.fromkeys(paired) if m in LOWER_IS_BETTER)
+        raise ValueError(f"objective {objective!r}: use success or one of {known}")
+    start = Path(seed) if seed is not None else target.seed
+    seed_id = tree_id(files(start))
     _config(
         out,
         {
@@ -222,6 +246,8 @@ def campaign(
             "trials": n,
             "level": level,
             "seed": seed_id,
+            **({"seed_dir": scrub(str(start))} if seed is not None else {}),
+            "objective": objective,
             "noise": noise,
             "rule": {
                 "gates": target.usecase.gates,
@@ -246,7 +272,7 @@ def campaign(
         if not seed.exists():
             with tempfile.TemporaryDirectory(dir=out) as tmp:
                 staged = Path(tmp) / "harness"
-                shutil.copytree(target.seed, staged, ignore=SKIP)
+                shutil.copytree(start, staged, ignore=SKIP)
                 seed.parent.mkdir(parents=True, exist_ok=True)
                 staged.rename(seed)
         if tree_id(files(seed)) != seed_id:
@@ -254,19 +280,20 @@ def campaign(
         row = _blank("000", None)
         row.update(decision="seed", reasons=["the starting harness"])
         row["tree"] = seed_id
-        _evaluate(target, out, row, n, None, level, screen=False)
+        _evaluate(target, out, row, n, None, level, screen=False, objective=objective)
         _append(ledger, rows, row)
+    end = {"trials": n, "level": level, "objective": objective, "frontier": frontier}
     if (out / "finalizing.json").exists():
         pending = json.loads((out / "finalizing.json").read_text())
-        return _finish(target, out, rows, pending, n["test"], level)
+        return _finish(target, out, rows, pending, **end)
     # Older versions could be interrupted after opening the test set.
     if (out / "test").exists():
         pending = {"stopped": "resumed final test scoring", "final": _base(rows)["id"]}
         _write_json(out / "finalizing.json", pending)
-        return _finish(target, out, rows, pending, n["test"], level)
+        return _finish(target, out, rows, pending, **end)
     if noise:
         if not (out / "noise.json").exists():
-            _noise(target, out, n["val"], level)
+            _noise(target, out, n["val"], level, objective)
         answer = json.loads((out / "noise.json").read_text())["decision"]
         if answer != "inconclusive":  # the rule would keep or reject noise: do not step
             reason = (
@@ -274,7 +301,9 @@ def campaign(
                 " against itself; add tasks or runs, or tighten the rule, then start again"
             )
             return {"stopped": reason, "final": _base(rows)["id"], "spent": _spent(out, rows)}
-    while (stop := _stop(rows, max_candidates, patience, max_usd, _spent(out, rows))) is None:
+    while (
+        stop := _stop(rows, max_candidates, patience, max_usd, _spent(out, rows), objective)
+    ) is None:
         base = _base(rows)
         dev = _score(target, out, base["id"], "dev", n["dev"])
         row = _blank(f"{len(rows):03d}", base["id"])
@@ -283,7 +312,7 @@ def campaign(
             if proposed.exists():
                 row = json.loads(proposed.read_text())
             else:
-                _propose(target, improver, out, rows, row, dev if feedback else None)
+                _propose(target, improver, out, rows, row, dev if feedback else None, objective)
                 if row["decision"] != "error":
                     _write_json(proposed, row)
         except Finished:
@@ -299,19 +328,30 @@ def campaign(
             reason = f"the improver failed: {row['reasons'][0]}; run the campaign again to resume"
             return {"stopped": reason, "final": _base(rows)["id"], "spent": _spent(out, rows)}
         if not row["decision"]:
-            _evaluate(target, out, row, n, base, level, screen)
+            _evaluate(target, out, row, n, base, level, screen, objective)
         _append(ledger, rows, row)
     result = {"stopped": stop, "final": _base(rows)["id"]}
     if test:
         _write_json(out / "finalizing.json", result)
-        return _finish(target, out, rows, result, n["test"], level)
+        return _finish(target, out, rows, result, **end)
     return result | {"spent": _spent(out, rows)}
 
 
 def _finish(
-    target: Target, out: Path, rows: list[dict], result: dict, trials: int, level: float
+    target: Target,
+    out: Path,
+    rows: list[dict],
+    result: dict,
+    *,
+    trials: dict[str, int],
+    level: float,
+    objective: str,
+    frontier: bool,
 ) -> dict:
-    result = result | {"test": _final(target, out, result["final"], trials, level)}
+    final = _final(target, out, result["final"], trials["test"], level, objective)
+    result = result | {"test": final}
+    if frontier:
+        result["frontier"] = _frontier(target, out, rows, trials)
     result["spent"] = _spent(out, rows)
     _write_json(out / "result.json", result)
     (out / "finalizing.json").unlink(missing_ok=True)
@@ -348,6 +388,9 @@ def _config(out: Path, config: dict[str, Any]) -> None:
             "screen",
             "improver",
         )
+        # Old campaigns predate the objective: they optimized success.
+        if saved.get("objective", "success") != config["objective"]:
+            raise ValueError(f"{path} was started with a different objective; use a new folder")
         # Old campaigns predate seed, noise and rule metadata. Their ledger holds the seed.
         for key in (*keys, *(key for key in ("seed", "noise", "rule") if key in saved)):
             if saved.get(key) != json.loads(json.dumps(config[key])):
@@ -428,6 +471,7 @@ def _stop(
     patience: int,
     max_usd: float | None,
     spent: dict,
+    objective: str = "success",
 ) -> str | None:
     tried = rows[1:]
     if len(tried) >= max_candidates:
@@ -441,7 +485,7 @@ def _stop(
         return f"{patience} candidates in a row were not adopted"
     if max_usd is not None and spent["improver_usd"] + spent["eval_usd"] >= max_usd:
         return f"spent ${spent['improver_usd'] + spent['eval_usd']:.2f} of ${max_usd:.2f}"
-    if not _base(rows)["dev"]["failing"]:
+    if objective == "success" and not _base(rows)["dev"]["failing"]:
         return "no development task fails"
     return None
 
@@ -478,12 +522,20 @@ def saved_episodes(
 
 
 def _score(
-    target: Target, out: Path, cid: str, split: str, trials: int, again: bool = False
+    target: Target,
+    out: Path,
+    cid: str,
+    split: str,
+    trials: int,
+    again: bool = False,
+    folder: Path | None = None,
 ) -> list[Grade]:
     """Run a candidate on one split, or load the runs a resumed campaign already has.
-    ``again`` takes new samples: the adapter gets trial numbers after the first ones."""
-    folder = out / ("test" if split == "test" else "candidates") / cid
-    folder = folder if split == "test" else folder / (split + "-again" * again)
+    ``again`` takes new samples: the adapter gets trial numbers after the first ones.
+    ``folder`` stores the runs somewhere other than the candidate's own folder."""
+    if folder is None:
+        folder = out / ("test" if split == "test" else "candidates") / cid
+        folder = folder if split == "test" else folder / (split + "-again" * again)
     if (folder / "episodes.jsonl").exists():
         config = json.loads((out / "campaign.json").read_text())
         episodes = saved_episodes(folder, cid, split, config, target.usecase)
@@ -501,12 +553,12 @@ def _score(
     return target.usecase.grade(episodes)
 
 
-def _noise(target: Target, out: Path, trials: int, level: float) -> None:
+def _noise(target: Target, out: Path, trials: int, level: float, objective: str) -> None:
     """The starting harness against itself on new samples of the validation tasks."""
     began = time.perf_counter()
     first = _score(target, out, "000", "val", trials)
     second = _score(target, out, "000", "val", trials, again=True)
-    c = compare(target.usecase, first, second, step=True, level=level)
+    c = compare(target.usecase, first, second, step=True, level=level, objective=objective)
     result = {
         "decision": c.decision,
         "reasons": c.reasons,
@@ -517,10 +569,56 @@ def _noise(target: Target, out: Path, trials: int, level: float) -> None:
     _write_json(out / "noise.json", result)
 
 
-def _brief(usecase: UseCase, grades: list[Grade]) -> dict[str, Any]:
+def _brief(usecase: UseCase, grades: list[Grade], objective: str = "success") -> dict[str, Any]:
     s = summarize(grades, usecase.metrics)
     out = {k: s[k] for k in KEPT} | {"success_ci": list(s["success_ci"]), "k": s["trials"]}
+    if objective != "success":  # None while a cost is unknown for any run
+        out[objective] = coordinate(s, objective)
     return out | {"failing": sorted(failures(grades))}
+
+
+def screened(objective: str, dev: dict[str, Any], base: dict[str, Any]) -> str | None:
+    """Why a candidate's development summary does not earn validation runs, or None.
+    For success, it must pass more development runs than the base. For another objective,
+    its value must be lower than the base's and its success no lower."""
+    if objective == "success":
+        if dev["success"] <= base["success"]:
+            return (
+                f"development success {dev['success']:.2f} is not above the base's"
+                f" {base['success']:.2f}"
+            )
+        return None
+    if dev["success"] < base["success"]:
+        return f"development success {dev['success']:.2f} is below the base's {base['success']:.2f}"
+    new, old = coordinate(dev, objective), coordinate(base, objective)
+    if new is None or old is None or new >= old:
+        return f"development {objective} {_value(new)} is not below the base's {_value(old)}"
+    return None
+
+
+def _value(v: float | None) -> str:
+    return "unknown" if v is None else f"{v:.4g}"
+
+
+def non_dominated(summaries: dict[str, dict[str, Any]]) -> list[str]:
+    """The harnesses that no other beats on success, cost per task and p95 latency: none
+    is at least as good on all three and better on one. Point estimates, as in
+    harness_evals.metrics.pareto; a harness without one of the three is left out."""
+    pts = {h: [coordinate(s, m) for m in AXES] for h, s in summaries.items()}
+    known = {
+        h: [v * sign for v, sign in zip(p, AXES.values(), strict=True)]
+        for h, p in pts.items()
+        if None not in p
+    }
+    return [
+        h
+        for h, a in known.items()
+        if not any(
+            b != a and all(x >= y for x, y in zip(b, a, strict=True))
+            for o, b in known.items()
+            if o != h
+        )
+    ]
 
 
 def _propose(
@@ -530,6 +628,7 @@ def _propose(
     rows: list[dict[str, Any]],
     row: dict[str, Any],
     dev: list[Grade] | None,
+    objective: str = "success",
 ) -> None:
     """Let the improver edit a copy of the base, then file what it did. Sets a decision
     only when the candidate cannot be scored. ``dev`` is None when feedback is withheld."""
@@ -546,10 +645,22 @@ def _propose(
             (ws / "feedback" / "dev.md").write_text(digest(target.usecase, dev, samples=2))
             save([g.episode for g in dev], ws / "feedback" / "dev.jsonl")
         (ws / "history.md").write_text(_history(rows, decisions=dev is not None))
+        goal, aim = "", " that should fix failures listed in `feedback/dev.md`" * (dev is not None)
+        if objective != "success":
+            limits = [
+                f"`{m}` may change by {op} {v:+g}"
+                for m, (op, v) in target.usecase.guardrails.items()
+            ]
+            goal = GOAL.format(
+                metric=objective,
+                guardrails="; the guardrails must hold: " + "; ".join(limits) if limits else "",
+            )
+            aim = f" that should lower `{objective}`"
         task = TASK.format(
             brief=target.brief.strip(),
             feedback=SEEN if dev is not None else BLIND,
-            target=" that should fix failures listed in `feedback/dev.md`" * (dev is not None),
+            goal=goal,
+            target=aim,
         )
         (ws / "TASK.md").write_text(task)
         # What the improver saw, kept for the record. The harness is in the parent.
@@ -595,28 +706,36 @@ def _evaluate(
     base: dict[str, Any] | None,
     level: float,
     screen: bool,
+    objective: str = "success",
 ) -> None:
     """Score a candidate on development, then validation, and decide. ``base`` is None
     for the starting harness, which is scored and not decided."""
+    uc = target.usecase
     began = time.perf_counter()
     graded: list[Grade] = []
     try:
         dev = _score(target, out, row["id"], "dev", n["dev"])
         graded += dev
-        row["dev"] = _brief(target.usecase, dev)
-        if base and screen and row["dev"]["success"] <= base["dev"]["success"]:
+        row["dev"] = _brief(uc, dev, objective)
+        why = None
+        if base and screen:
+            old_dev = _score(target, out, base["id"], "dev", n["dev"])
+            why = screened(objective, summarize(dev, uc.metrics), summarize(old_dev, uc.metrics))
+        if why:
             row["decision"] = "screened"
-            row["reasons"] = [
-                f"development success {row['dev']['success']:.2f} is not above the base's"
-                f" {base['dev']['success']:.2f}; validation was not run"
-            ]
+            row["reasons"] = [f"{why}; validation was not run"]
         else:
             val = _score(target, out, row["id"], "val", n["val"])
             graded += val
-            row["val"] = _brief(target.usecase, val)
+            row["val"] = _brief(uc, val, objective)
             if base:
-                old = _score(target, out, base["id"], "val", n["val"])
-                c = compare(target.usecase, old, val, step=True, level=level)
+                if objective.startswith("latency"):  # both sides measured at about one time
+                    folder = out / "candidates" / row["id"] / "val-base"
+                    old = _score(target, out, base["id"], "val", n["val"], folder=folder)
+                    graded += old
+                else:
+                    old = _score(target, out, base["id"], "val", n["val"])
+                c = compare(uc, old, val, step=True, level=level, objective=objective)
                 row["decision"], row["reasons"] = c.decision, c.reasons
                 row["delta"] = {
                     k: [d[0], *d[1]] for k, d in c.deltas.items() if d and k in KEPT
@@ -654,7 +773,9 @@ def _history(rows: list[dict[str, Any]], decisions: bool = True) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _final(target: Target, out: Path, final: str, trials: int, level: float) -> dict[str, Any]:
+def _final(
+    target: Target, out: Path, final: str, trials: int, level: float, objective: str
+) -> dict[str, Any]:
     """Score the starting and the final harness on the test tasks, once."""
     uc = target.usecase
     seed = _score(target, out, "000", "test", trials)
@@ -663,12 +784,41 @@ def _final(target: Target, out: Path, final: str, trials: int, level: float) -> 
         result["misses"] = gate_failures(summarize(seed, uc.metrics), uc.gates)
         return result
     best = _score(target, out, final, "test", trials)
-    c = compare(uc, seed, best, step=True, level=level)
+    c = compare(uc, seed, best, step=True, level=level, objective=objective)
     result[final] = _brief(uc, best)
     result["delta"] = {k: [d[0], *d[1]] for k, d in c.deltas.items() if d and k in KEPT}
     result["decision"], result["reasons"] = c.decision, c.reasons
     result["misses"] = gate_failures(summarize(best, uc.metrics), uc.gates)  # the release bar
     return result
+
+
+def _frontier(
+    target: Target, out: Path, rows: list[dict[str, Any]], trials: dict[str, int]
+) -> list[dict[str, Any]]:
+    """The start and every candidate scored on validation that misses no gate the start
+    clears and adds no critical violation; of those, the non_dominated() ones, each scored
+    on the test tasks."""
+    uc = target.usecase
+    val = {r["id"]: _score(target, out, r["id"], "val", trials["val"]) for r in rows if r["val"]}
+    sums = {cid: summarize(grades, uc.metrics) for cid, grades in val.items()}
+
+    def missed(s: dict[str, Any]) -> set[str]:
+        return {m for m, bar in uc.gates.items() if gate_failures(s, {m: bar})}
+
+    start = sums["000"]
+    fair = {
+        cid: s
+        for cid, s in sums.items()
+        if missed(s) <= missed(start) and s["violations"] <= start["violations"]
+    }
+    return [
+        {
+            "id": cid,
+            "val": _brief(uc, val[cid]),
+            "test": _brief(uc, _score(target, out, cid, "test", trials["test"])),
+        }
+        for cid in non_dominated(fair)
+    ]
 
 
 def scrub(text: str) -> str:

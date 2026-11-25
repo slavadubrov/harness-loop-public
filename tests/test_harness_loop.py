@@ -45,8 +45,10 @@ def adapter(harness: Path):
         spec = importlib.util.spec_from_file_location("candidate", harness / "harness.py")
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
+        cost, latency = getattr(module, "COST", 0.001), getattr(module, "LATENCY", 0.1)
         return [
-            Episode(t.id, reply=module.reply(t.input), cost_usd=0.001, latency_s=0.1) for t in tasks
+            Episode(t.id, reply=module.reply(t.input), cost_usd=cost, latency_s=latency)
+            for t in tasks
         ]
 
     return run_tasks
@@ -619,3 +621,181 @@ def test_openai_agent_uses_workspace_tools_computes_cost_and_denies_escapes(tmp_
     ]
     unknown = openai_agent(model="unknown-custom-model")(ws)
     assert unknown.error is None and unknown.cost_usd is None
+
+
+# -- objectives, another start and the frontier ----------------------------------------------
+
+
+def priced(code: str, cost: float, latency: float = 0.1) -> str:
+    return code + f"COST = {cost}\nLATENCY = {latency}\n"
+
+
+def start_at(tmp_path: Path, code: str) -> Path:
+    start = tmp_path / "start"
+    start.mkdir(exist_ok=True)
+    (start / "harness.py").write_text(code)
+    return start
+
+
+def test_a_cost_campaign_adopts_a_cheaper_harness_and_drops_one_that_loses_success(tmp_path):
+    t = target(tmp_path)
+    t.usecase.guardrails = {"latency_p95": ("<=", 1.0)}
+    start = start_at(tmp_path, priced(REVERSE, 0.002))
+    steps = [
+        write(priced(SEED, 0.0005), "cheaper, but echoes"),
+        write(priced(REVERSE, 0.002) + "# same cost\n", "a comment"),
+        write(priced(REVERSE, 0.001), "cheaper"),
+    ]
+    out, n = tmp_path / "run", {"dev": 1, "val": 1, "test": 1}
+    kw = {"trials": n, "objective": "cost_per_task", "seed": start, "patience": 5}
+    result = campaign(t, scripted(steps), out, **kw, max_candidates=3)
+    rows = read_ledger(out)
+    assert [r["decision"] for r in rows] == ["seed", "screened", "screened", "adopt"]
+    assert rows[1]["reasons"][0].startswith("development success 0.33 is below the base's 1.00")
+    assert rows[2]["reasons"][0].startswith("development cost_per_task 0.002 is not below")
+    assert rows[3]["reasons"][0].startswith("cost_per_task is lower")
+    assert rows[3]["reasons"][1].startswith("success holds")
+    assert rows[3]["dev"]["cost_per_task"] == pytest.approx(0.001)
+    # No development task fails from the start: only the success objective stops on that.
+    assert result["stopped"] == "reached 3 candidates" and result["final"] == "003"
+    assert result["test"]["decision"] == "adopt"
+    assert json.loads((out / "noise.json").read_text())["decision"] == "inconclusive"
+    task = (out / "candidates" / "001" / "seen" / "TASK.md").read_text()
+    assert "This campaign lowers `cost_per_task`. Success must not fall" in task
+    assert "`latency_p95` may change by <= +1" in task and "should lower `cost_per_task`" in task
+    r = regrade(t.usecase, out)
+    assert all(e["agrees"] for e in r["entries"][1:])
+    assert "objective `cost_per_task`" in report(t.usecase, out)
+    # A cheaper harness that loses success is rejected on validation when nothing screens.
+    steps = [write(priced(SEED, 0.0005), "cheaper, but echoes")]
+    campaign(t, scripted(steps), tmp_path / "open", **kw, screen=False, max_candidates=1)
+    row = read_ledger(tmp_path / "open")[1]
+    assert row["decision"] == "reject" and row["reasons"][0].startswith("success is lower")
+    with pytest.raises(ValueError, match="different objective"):
+        campaign(t, scripted([]), out, trials=n, seed=start)
+    with pytest.raises(ValueError, match="objective 'speed'"):
+        campaign(t, scripted([]), tmp_path / "bad", objective="speed")
+
+
+def test_a_latency_campaign_runs_the_base_again_next_to_each_candidate(tmp_path):
+    t = target(tmp_path)
+    start = start_at(tmp_path, priced(REVERSE, 0.001, latency=0.5))
+    out, n = tmp_path / "run", {"dev": 1, "val": 1, "test": 1}
+    steps = [write(priced(REVERSE, 0.001, latency=0.2), "faster")]
+    campaign(t, scripted(steps), out, trials=n, objective="latency_p95", seed=start)
+    row = read_ledger(out)[1]
+    assert row["decision"] == "adopt" and row["reasons"][0].startswith("latency_p95 is lower")
+    again = out / "candidates" / "001" / "val-base"
+    assert json.loads((again / "manifest.json").read_text())["harnesses"] == ["000"]
+    assert row["eval"]["episodes"] == 6 + 8 + 8  # dev, val and the base's val again
+    assert regrade(t.usecase, out)["entries"][1]["agrees"]
+
+
+def test_a_campaign_can_start_from_another_harness(tmp_path):
+    t, out = target(tmp_path), tmp_path / "run"
+    start = start_at(tmp_path, REVERSE)
+    campaign(t, scripted([]), out, seed=start, test=False)
+    assert (out / "candidates" / "000" / "harness" / "harness.py").read_text() == REVERSE
+    config = json.loads((out / "campaign.json").read_text())
+    assert config["seed"] == read_ledger(out)[0]["tree"] and config["seed_dir"].endswith("start")
+    assert config["objective"] == "success"
+    with pytest.raises(ValueError, match="different seed"):
+        campaign(t, scripted([]), out, test=False)
+
+
+def test_the_run_command_passes_objective_seed_and_frontier(tmp_path, monkeypatch):
+    import harness_loop.cli as cli
+
+    got = {}
+    monkeypatch.setattr(cli, "_target", lambda ref: target(tmp_path))
+    monkeypatch.setattr(
+        cli, "campaign", lambda *a, **kw: got.update(kw) or {"stopped": "", "final": ""}
+    )
+    monkeypatch.setattr(cli, "report", lambda usecase, out: "")
+    argv = ["run", "x", str(tmp_path / "run"), "--improver", "true", "--seed", str(tmp_path)]
+    main([*argv, "--objective", "cost_per_task", "--frontier"])
+    assert got["objective"] == "cost_per_task" and got["seed"] == tmp_path and got["frontier"]
+    main(argv)
+    assert got["objective"] == "success" and got["frontier"] is False
+
+
+def test_the_frontier_keeps_every_harness_no_other_beats_on_all_three_metrics():
+    from harness_evals import pareto
+
+    from harness_loop.loop import non_dominated
+
+    def s(success, cost, latency):
+        return {"success": success, "cost_per_task": cost, "latency_p95": latency}
+
+    sums = {
+        "a": s(0.9, 2.0, 3.0),
+        "b": s(0.9, 1.0, 4.0),
+        "c": s(0.8, 3.0, 1.0),  # beaten on success and cost by a, but the fastest
+        "d": s(0.8, 3.0, 2.0),  # c is as good on all three and faster
+        "e": s(0.9, 2.0, 3.0),  # the same point as a: neither beats the other
+        "f": {**s(1.0, 0.5, 1.0), "unknown_cost": 1},  # cost unknown: left out
+    }
+    assert non_dominated(sums) == ["a", "b", "c", "e"]
+    assert "c" not in pareto(sums, "cost_per_task", "success")  # two metrics drop c
+
+
+def test_a_campaign_scores_its_frontier_on_the_test_tasks(tmp_path):
+    t = target(tmp_path)
+    t.usecase.gates = {"latency_p95": ("<=", 1.0)}
+    start = start_at(tmp_path, priced(REVERSE, 0.002, latency=0.2))
+    steps = [
+        write(priced(REVERSE, 0.001, latency=0.3), "cheaper, a little slower"),
+        write(priced(REVERSE, 0.0005, latency=2.0), "cheapest, past the latency bar"),
+        write(priced(REVERSE, 0.001, latency=0.4), "as cheap, slower"),
+        write(priced(SEED, 0.0001, latency=0.1), "cheap and fast, but echoes"),
+    ]
+    out, n = tmp_path / "run", {"dev": 1, "val": 1, "test": 1}
+    kw = {"trials": n, "objective": "cost_per_task", "seed": start, "screen": False}
+    result = campaign(t, scripted(steps), out, **kw, patience=5, frontier=True)
+    rows = read_ledger(out)
+    assert [r["decision"] for r in rows] == [
+        "seed",
+        "adopt",
+        "reject",
+        "inconclusive",
+        "reject",
+    ]
+    assert [m["id"] for m in result["frontier"]] == ["000", "001", "004"]
+    assert result["frontier"][2]["test"]["success"] == 0.25
+    assert sorted(p.name for p in (out / "test").iterdir()) == ["000", "001", "004"]
+    saved = json.loads((out / "result.json").read_text())
+    assert [m["id"] for m in saved["frontier"]] == ["000", "001", "004"]
+    text = report(t.usecase, out)
+    assert "## The frontier" in text and "| 004 | 0.25 | $0.00010 | 0.10 | unknown |" in text
+    assert (out / "frontier-cost.svg").read_text().startswith("<svg")
+    assert (out / "frontier-latency.svg").read_text().startswith("<svg")
+    # Without the flag the test tasks see the start and the final harness only.
+    campaign(t, scripted(steps), tmp_path / "plain", **kw, patience=5)
+    assert sorted(p.name for p in (tmp_path / "plain" / "test").iterdir()) == ["000", "001"]
+    assert "frontier" not in json.loads((tmp_path / "plain" / "result.json").read_text())
+
+
+def test_the_frontier_command_reads_the_saved_sql_campaigns(tmp_path, capsys):
+    campaigns = Path(__file__).parents[1] / "examples" / "sql_desk" / "campaigns"
+    folders = [str(campaigns / c) for c in ("run-1", "run-2", "no-feedback-1", "no-feedback-2")]
+    main(["frontier", "examples.sql_desk.target:TARGET", *folders, "--out", str(tmp_path)])
+    lines = capsys.readouterr().out.splitlines()
+    assert [line.split(" | ")[0] for line in lines[2:]] == [
+        "| run-1/000",
+        "| run-1/002",
+        "| run-2/001",
+    ]
+    assert all(line.endswith("| yes |") for line in lines[2:])
+    assert (tmp_path / "frontier-cost.svg").exists() and (
+        tmp_path / "frontier-latency.svg"
+    ).exists()
+    with pytest.raises(SystemExit, match="not comparable|differs"):
+        other = tmp_path / "other"
+        import shutil
+
+        shutil.copytree(campaigns / "run-2", other)
+        manifest = other / "test" / "001" / "manifest.json"
+        data = json.loads(manifest.read_text())
+        data["frozen"]["model"] = "another"
+        manifest.write_text(json.dumps(data))
+        main(["frontier", "examples.sql_desk.target:TARGET", folders[0], str(other)])

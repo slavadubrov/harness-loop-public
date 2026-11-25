@@ -1,0 +1,1 @@
+I compacted the schema sent to the model by collapsing formatting whitespace and removing repeated `CREATE TABLE` prefixes, while preserving identifiers, types, constraints, and quoted values. The stored-value lookup still uses the original schema. All development tasks already passed, so this change targets lower input-token cost rather than a known correctness failure.

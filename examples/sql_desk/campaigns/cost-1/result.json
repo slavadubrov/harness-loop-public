@@ -1,0 +1,166 @@
+{
+  "stopped": "reached 8 candidates",
+  "final": "008",
+  "test": {
+    "000": {
+      "success": 1.0,
+      "pass^k": 1.0,
+      "violations": 0,
+      "cost_per_task": 0.0018645555555555555,
+      "latency_p95": 3.534071166002832,
+      "tokens_per_task": 649.5,
+      "success_ci": [
+        1.0,
+        1.0
+      ],
+      "k": 3,
+      "failing": []
+    },
+    "008": {
+      "success": 1.0,
+      "pass^k": 1.0,
+      "violations": 0,
+      "cost_per_task": 0.0013722777777777778,
+      "latency_p95": 3.2220584169990616,
+      "tokens_per_task": 447.47222222222223,
+      "success_ci": [
+        1.0,
+        1.0
+      ],
+      "k": 3,
+      "failing": []
+    },
+    "delta": {
+      "success": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "cost_per_task": [
+        -0.0004922777777777777,
+        -0.0005271851851851852,
+        -0.000462648148148148
+      ],
+      "latency_p95": [
+        -0.3120127490037703,
+        -0.8231128749976051,
+        0.21703391599658062
+      ],
+      "tokens_per_task": [
+        -202.02777777777777,
+        -205.51851851851853,
+        -199.06481481481478
+      ]
+    },
+    "decision": "adopt",
+    "reasons": [
+      "cost_per_task is lower: -0.00053 to -0.00046",
+      "success holds: +0.000 to +0.000, no lower than -0.02"
+    ],
+    "misses": []
+  },
+  "frontier": [
+    {
+      "id": "004",
+      "val": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.001379611111111111,
+        "latency_p95": 2.5293037080009526,
+        "tokens_per_task": 470.69444444444446,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      },
+      "test": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.0014492037037037036,
+        "latency_p95": 3.4658221659992705,
+        "tokens_per_task": 477.56481481481484,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      }
+    },
+    {
+      "id": "007",
+      "val": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.0013412037037037038,
+        "latency_p95": 2.5461708330003603,
+        "tokens_per_task": 452.4537037037037,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      },
+      "test": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.0013914444444444443,
+        "latency_p95": 3.303825750001124,
+        "tokens_per_task": 457.3888888888889,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      }
+    },
+    {
+      "id": "008",
+      "val": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.0013264814814814814,
+        "latency_p95": 2.552390250002645,
+        "tokens_per_task": 442.98148148148147,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      },
+      "test": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.0013722777777777778,
+        "latency_p95": 3.2220584169990616,
+        "tokens_per_task": 447.47222222222223,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      }
+    }
+  ],
+  "spent": {
+    "improver_usd": 0.399042,
+    "improver_unknown": 0,
+    "improver_seconds": 354.2553191679981,
+    "eval_usd": 3.050266,
+    "eval_unknown": 0,
+    "eval_seconds": 727.7,
+    "eval_episodes": 2052
+  }
+}

@@ -1,6 +1,6 @@
 """Improve an agent harness in a closed loop with the model held fixed."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 from harness_loop.improvers import claude_code, command, openai_agent, scripted  # noqa: E402
 from harness_loop.loop import (  # noqa: E402
@@ -9,6 +9,7 @@ from harness_loop.loop import (  # noqa: E402
     Target,
     campaign,
     files,
+    non_dominated,
     patch,
     read_ledger,
     scrub,
@@ -23,6 +24,7 @@ __all__ = [
     "claude_code",
     "command",
     "files",
+    "non_dominated",
     "openai_agent",
     "patch",
     "read_ledger",

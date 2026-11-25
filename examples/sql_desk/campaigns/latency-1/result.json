@@ -1,0 +1,94 @@
+{
+  "stopped": "3 candidates in a row were not adopted",
+  "final": "000",
+  "test": {
+    "000": {
+      "success": 1.0,
+      "pass^k": 1.0,
+      "violations": 0,
+      "cost_per_task": 0.0018612222222222222,
+      "latency_p95": 3.4370914999999513,
+      "tokens_per_task": 649.1666666666666,
+      "success_ci": [
+        1.0,
+        1.0
+      ],
+      "k": 3,
+      "failing": []
+    },
+    "misses": []
+  },
+  "frontier": [
+    {
+      "id": "001",
+      "val": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.001732277777777778,
+        "latency_p95": 2.8959096660000796,
+        "tokens_per_task": 656.3611111111111,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      },
+      "test": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.0017688148148148149,
+        "latency_p95": 2.784070082998369,
+        "tokens_per_task": 659.925925925926,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      }
+    },
+    {
+      "id": "003",
+      "val": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.0018601296296296295,
+        "latency_p95": 2.4975098750001052,
+        "tokens_per_task": 707.5462962962963,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      },
+      "test": {
+        "success": 1.0,
+        "pass^k": 1.0,
+        "violations": 0,
+        "cost_per_task": 0.0019253703703703703,
+        "latency_p95": 3.43306450000091,
+        "tokens_per_task": 713.9814814814815,
+        "success_ci": [
+          1.0,
+          1.0
+        ],
+        "k": 3,
+        "failing": []
+      }
+    }
+  ],
+  "spent": {
+    "improver_usd": 0.16156399999999999,
+    "improver_unknown": 0,
+    "improver_seconds": 98.55999954200524,
+    "eval_usd": 2.663194,
+    "eval_unknown": 0,
+    "eval_seconds": 527.4,
+    "eval_episodes": 1476
+  }
+}

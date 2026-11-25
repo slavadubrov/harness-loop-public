@@ -1,0 +1,17 @@
+--- a/desk.py
++++ b/desk.py
+@@ -7,12 +7,10 @@
+ 
+ import re
+ 
+-PROMPT = """Answer with one read-only SQLite SELECT. SQL only; omit cosmetic output aliases.
+-
++PROMPT = """One read-only SQLite SELECT only; no cosmetic aliases.
+ Schema:
+ {schema}
+-{domains}
+-Question: {question}"""
++{domains}Question: {question}"""
+ 
+ _IDENTIFIER = r'"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|[a-z_]\w*'
+ _TABLE = re.compile(rf'\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?({_IDENTIFIER})\s*\(', re.I)

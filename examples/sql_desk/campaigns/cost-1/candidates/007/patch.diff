@@ -1,0 +1,36 @@
+--- a/desk.py
++++ b/desk.py
+@@ -5,6 +5,7 @@
+ evaluator runs it and compares the rows with the expected ones.
+ """
+ 
++from collections import Counter
+ import re
+ 
+ PROMPT = """Answer with one read-only SQLite SELECT. SQL only; omit cosmetic output aliases.
+@@ -122,12 +123,23 @@
+         # The schema-only prompt still works if value inspection is unavailable.
+         return ''
+ 
++    # A bare label is enough when the identifier occurs only once in the
++    # schema. Count all identifier mentions conservatively, not just probes.
++    mentions = Counter(
++        _unquote(token[0]).casefold()
++        for token in _DELIMITER.finditer(schema)
++        if token[0][0] not in "'(),"
++    )
+     lines, remaining = [], 1600
+     for i, values in rows:
+         table, column = columns[i]
+-        line = f'{table}.{column}: {values}'
++        qualified = f'{table}.{column}'
++        line = f'{qualified}: {values}'
+         if len(line) + 1 <= remaining and line.isprintable():
+-            lines.append(f'{table}.{column}: {_compact_domain_values(values)}')
++            label = qualified
++            if _BARE_VALUE.fullmatch(column) and mentions[column.casefold()] == 1:
++                label = column
++            lines.append(f'{label}: {_compact_domain_values(values)}')
+             remaining -= len(line) + 1
+     if not lines:
+         return ''

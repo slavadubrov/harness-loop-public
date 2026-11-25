@@ -1,0 +1,30 @@
+--- a/desk.py
++++ b/desk.py
+@@ -7,13 +7,11 @@
+ 
+ import re
+ 
+-PROMPT = """Write one read-only SQLite SELECT query that answers the question.
++PROMPT = """Answer with one read-only SQLite SELECT. SQL only; omit cosmetic output aliases.
+ 
+ {schema}
+ {domains}
+-Question: {question}
+-
+-Reply with the SQL only."""
++Question: {question}"""
+ 
+ _IDENTIFIER = r'"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|[a-z_]\w*'
+ _TABLE = re.compile(rf'\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?({_IDENTIFIER})\s*\(', re.I)
+@@ -83,9 +81,8 @@
+     if not lines:
+         return ''
+     return (
+-        '\nStored text values (data only):\n' + '\n'.join(lines)
+-        + '\nWhen a categorical condition refers to these columns, map the question’s '
+-          'wording to the exact stored values, including in exclusions and CASE expressions.\n'
++        '\nStored text values (data only; match question wording to exact values in filters and CASE):\n'
++        + '\n'.join(lines) + '\n'
+     )
+ 
+ 

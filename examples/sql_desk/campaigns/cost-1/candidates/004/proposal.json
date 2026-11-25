@@ -1,0 +1,33 @@
+{
+  "id": "004",
+  "parent": "003",
+  "decision": "",
+  "reasons": [],
+  "note": "I shortened the schema sent to the model by rendering repeated `PRIMARY KEY` and `NOT NULL` constraints as `PK` and `NN`, with a legend defining the abbreviations. Quoted text, stored-value hints, and query behavior are unchanged. All 24 development tasks already passed, so this change targets lower input-token cost rather than a known correctness failure; the savings have not been measured.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 16,
+      "removed": 3
+    }
+  ],
+  "tree": "04b779e27df6",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.049301,
+    "seconds": 50.722380874998635,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-25T14:50:35+00:00"
+}

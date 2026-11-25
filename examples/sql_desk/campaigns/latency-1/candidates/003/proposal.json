@@ -1,0 +1,33 @@
+{
+  "id": "003",
+  "parent": "000",
+  "decision": "",
+  "reasons": [],
+  "note": "The existing read-only domain probe now also retrieves small, unambiguous key/value mappings from `shop_meta`. The model can use those live snapshot values directly for dates and unit conversions instead of generating scalar metadata subqueries, with no extra database or model call. All development runs passed at baseline, so this targets tail latency rather than a known correctness failure; the latency impact has not been measured.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 28,
+      "removed": 2
+    }
+  ],
+  "tree": "cfb382944a32",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.060939,
+    "seconds": 45.95287262500278,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-25T15:08:25+00:00"
+}

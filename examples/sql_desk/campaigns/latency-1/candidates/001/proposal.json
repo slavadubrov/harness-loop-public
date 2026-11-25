@@ -1,0 +1,33 @@
+{
+  "id": "001",
+  "parent": "000",
+  "decision": "",
+  "reasons": [],
+  "note": "I updated the SQL-generation prompt to request short aliases and omit unrequested display labels, comments, and Markdown. The development baseline had no correctness failures, so this change targets tail latency by reducing the number of tokens generated for longer queries, without changing the schema context, model settings, or requested results. The latency improvement has not been measured.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 2,
+      "removed": 1
+    }
+  ],
+  "tree": "25f445023fe3",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.041137,
+    "seconds": 22.25974566700097,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-25T15:04:05+00:00"
+}
