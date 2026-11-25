@@ -30,8 +30,10 @@ It is the companion code for Part 5 of the
    that cannot help costs no look at the validation tasks.
 4. **Decide on validation tasks.** `harness_evals.compare(..., step=True)` pairs the
    candidate with the current harness task by task. The candidate is kept only if the
-   whole interval of the success difference is above zero, clearly more tasks got better
-   than worse, and no guardrail breaks.
+   whole interval of the success difference is above zero, a Wilcoxon signed-rank test
+   over the tasks that changed favours the candidate, and no guardrail breaks. The test
+   ranks the changed tasks by the size of the change and compares the rank sum of the
+   gains with the rank sum of the losses.
 5. **Record.** The ledger gets the note, the diff, the scores, the decision and its
    reasons, the improver's cost and the evaluation's cost.
 
@@ -44,8 +46,12 @@ with new samples, and the pair goes through the same rule (`noise.json`). Two ru
 harness differ by noise alone, so the rule must answer "inconclusive". If it adopts or
 rejects, it is too easy to satisfy on these tasks: add tasks or runs before trusting it.
 A campaign whose noise check gets any other answer stops before its first step. The
-rule's two conditions beyond the interval, higher success only and a sign test over the
-tasks that changed, both come from pairs this check found.
+rule's two conditions beyond the interval, higher success only and a test over the
+tasks that changed, both come from pairs this check found. Up to harness-evals 0.7.0
+that test was a sign test, which counts a task that lost one run of three the same as a
+task that now fails every run. From 0.8.0 it is the Wilcoxon signed-rank test. The six
+saved SQL desk campaigns ran under the sign test; their ledgers keep the reasons written
+then, and regrading them under the Wilcoxon test gives the same decisions.
 
 ## Objectives: success, cost or latency
 
@@ -346,8 +352,9 @@ code.
 ## Limits
 
 - The adoption rule's intervals come from your validation tasks. With a few dozen tasks
-  only a change that fixes several of them can be kept; smaller gains end as
-  inconclusive. That is the rule working, and a reason to write more tasks.
+  only a change that fixes several of them can be kept: when no task gets worse, the
+  Wilcoxon test needs at least six tasks to improve. Smaller gains end as inconclusive.
+  That is the rule working, and a reason to write more tasks.
 - Every kept change was chosen because it scored well on the validation tasks, so the
   final harness's validation score is optimistic. Read the test score.
 - The loop makes several decisions on the same validation tasks. `level` tightens each

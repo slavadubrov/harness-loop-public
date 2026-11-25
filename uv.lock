@@ -13,12 +13,12 @@ wheels = [
 
 [[package]]
 name = "harness-evals"
-version = "0.7.0"
-source = { git = "https://github.com/slavadubrov/harness-evals?rev=0f59b5e7c760062be19d55dc59bf069c8c918d2b#0f59b5e7c760062be19d55dc59bf069c8c918d2b" }
+version = "0.8.0"
+source = { git = "https://github.com/slavadubrov/harness-evals?rev=d391e288d087671f94b09793d21dc5401e8b6296#d391e288d087671f94b09793d21dc5401e8b6296" }
 
 [[package]]
 name = "harness-loop"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "harness-evals" },
@@ -31,7 +31,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "harness-evals", git = "https://github.com/slavadubrov/harness-evals?rev=0f59b5e7c760062be19d55dc59bf069c8c918d2b" }]
+requires-dist = [{ name = "harness-evals", git = "https://github.com/slavadubrov/harness-evals?rev=d391e288d087671f94b09793d21dc5401e8b6296" }]
 
 [package.metadata.requires-dev]
 dev = [
