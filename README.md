@@ -157,11 +157,13 @@ uv run harness-loop frontier examples.sql_desk.target:TARGET examples/sql_desk/c
 
 | Harness | Success | $ per task | p95 latency, s |
 | --- | --- | --- | --- |
-| `run-1/000`, the start | 0.58 | $0.00130 | 3.04 |
+| `no-feedback-1/000`, the start | 0.58 | $0.00130 | 2.93 |
 | `cost-1/008` | 1.00 | $0.00137 | 3.22 |
 | `latency-1/001`, not kept by the rule | 1.00 | $0.00177 | 2.78 |
 
-The frontier uses point estimates. The latency difference that puts `latency-1/001` on
+All four earlier campaigns begin with the same starting harness. The command lists it
+once, with the test runs of the first folder that has them. The frontier uses point
+estimates. The latency difference that puts `latency-1/001` on
 it is within the noise the campaign measured.
 
 The database stores values such as `pending_payment` and `NLD`. A query that guesses
