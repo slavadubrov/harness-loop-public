@@ -1,0 +1,12 @@
+--- a/desk.py
++++ b/desk.py
+@@ -13,6 +13,9 @@
+ {domains}
+ Question: {question}
+ 
++Use a direct SELECT when it preserves the requested results. Add a CTE or subquery
++when needed for a separate aggregation level, a window filter, or other required logic;
++avoid intermediate steps that only rename or pass through columns.
+ Reply with the SQL only."""
+ 
+ _IDENTIFIER = r'"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|[a-z_]\w*'

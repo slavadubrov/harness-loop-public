@@ -138,6 +138,32 @@ uv run harness-loop show - examples/sql_desk/campaigns/run-1 002    # the kept c
 | `no-feedback-1`, a control | 3 | 0 | 0.58 | |
 | `no-feedback-2`, a control | 3 | 0 | 0.58 | |
 
+Two more saved campaigns start from the harness that `run-2` kept (`--seed`) and optimize
+another metric while success holds. Both ran with `--frontier`.
+
+| Saved campaign | Candidates | Kept | On test, start to final |
+| --- | --- | --- | --- |
+| `cost-1`, `--objective cost_per_task` | 8 | 7 | Success stays at 1.00. Cost per question $0.00186 to $0.00137, tokens 650 to 447 |
+| `latency-1`, `--objective latency_p95` | 3 | 0 | Unchanged. No candidate's p95 latency interval was below zero |
+
+In `cost-1` every kept change shortens the prompt: a shorter instruction, a compact
+schema, shorter stored-value hints. In `latency-1` two runs of the starting harness
+differed in p95 latency by -0.37 to +0.07 seconds, and no candidate moved it by more.
+Across all six campaigns, three harnesses are on the frontier on the test questions:
+
+```bash
+uv run harness-loop frontier examples.sql_desk.target:TARGET examples/sql_desk/campaigns/* --split test
+```
+
+| Harness | Success | $ per task | p95 latency, s |
+| --- | --- | --- | --- |
+| `run-1/000`, the start | 0.58 | $0.00130 | 3.04 |
+| `cost-1/008` | 1.00 | $0.00137 | 3.22 |
+| `latency-1/001`, not kept by the rule | 1.00 | $0.00177 | 2.78 |
+
+The frontier uses point estimates. The latency difference that puts `latency-1/001` on
+it is within the noise the campaign measured.
+
 The database stores values such as `pending_payment` and `NLD`. A query that guesses
 `pending` or `Netherlands` can execute successfully and still return the wrong rows.
 All four campaigns proposed looking up stored values on their first attempt.

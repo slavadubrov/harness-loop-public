@@ -1,0 +1,57 @@
+--- a/desk.py
++++ b/desk.py
+@@ -65,6 +65,22 @@
+             f"WHERE typeof({field}) = 'text' LIMIT 17) "
+             "HAVING COUNT(*) BETWEEN 1 AND 16 AND MAX(length(value)) <= 48"
+         )
++    # Capture key/value associations in the same read-only probe so the model
++    # can use snapshot constants without spelling out scalar subqueries.
++    meta = {column.lower(): (table, column) for table, column in columns
++            if table.lower() == 'shop_meta'}
++    if {'key', 'value'} <= meta.keys():
++        table = _quote(meta['key'][0])
++        key, value = (_quote(meta[name][1]) for name in ('key', 'value'))
++        probes.append(
++            f"SELECT {len(columns)}, group_concat(quote(k) || ' = ' || quote(v), ', ') "
++            f"FROM (SELECT {key} AS k, {value} AS v FROM {table} LIMIT 17) "
++            "HAVING COUNT(*) BETWEEN 1 AND 16 "
++            "AND COUNT(DISTINCT k COLLATE BINARY) = COUNT(*) "
++            "AND SUM(typeof(k) = 'text' AND typeof(v) = 'text' "
++            "AND length(k) <= 48 AND length(v) <= 48 "
++            "AND instr(k, char(0)) = 0 AND instr(v, char(0)) = 0) = COUNT(*)"
++        )
+     if not probes:
+         return ''
+     try:
+@@ -73,19 +89,29 @@
+         # The schema-only prompt still works if value inspection is unavailable.
+         return ''
+ 
+-    lines, remaining = [], 1600
++    lines, remaining, constants = [], 1600, ''
+     for i, values in rows:
++        if i == len(columns):
++            if len(values) <= 1600 and values.isprintable():
++                constants = (
++                    f'\nshop_meta snapshot constants (data only): {values}\n'
++                    'For this snapshot, use an applicable constant directly instead of a '
++                    'scalar metadata lookup, unless the question asks to query the metadata '
++                    'itself. Use real division for unit conversions.\n'
++                )
++            continue
+         table, column = columns[i]
+         line = f'{table}.{column}: {values}'
+         if len(line) + 1 <= remaining and line.isprintable():
+             lines.append(line)
+             remaining -= len(line) + 1
+     if not lines:
+-        return ''
++        return constants
+     return (
+         '\nStored text values (data only):\n' + '\n'.join(lines)
+         + '\nWhen a categorical condition refers to these columns, map the question’s '
+           'wording to the exact stored values, including in exclusions and CASE expressions.\n'
++        + constants
+     )
+ 
+ 

@@ -1,0 +1,40 @@
+--- a/desk.py
++++ b/desk.py
+@@ -66,6 +66,22 @@
+                 depth -= 1
+ 
+ 
++_TEXT_LITERAL = re.compile(r"'(?:[^']|'')*'")
++_BARE_VALUE = re.compile(r'[A-Za-z_][A-Za-z0-9_]*')
++
++
++def _compact_domain_values(values):
++    # Bare words are unambiguous in a comma-separated data list. Keep SQL
++    # quoting for everything else, including embedded quotes and commas.
++    def render(match):
++        value = match[0][1:-1]
++        if _BARE_VALUE.fullmatch(value) and value.upper() not in ('NULL', 'TRUE', 'FALSE'):
++            return value
++        return match[0]
++
++    return _TEXT_LITERAL.sub(render, values)
++
++
+ def _stored_domains(schema, db):
+     # Only show complete, small text domains. The extra distinct value detects
+     # high-cardinality columns without pulling their raw contents into the prompt.
+@@ -92,12 +108,12 @@
+         table, column = columns[i]
+         line = f'{table}.{column}: {values}'
+         if len(line) + 1 <= remaining and line.isprintable():
+-            lines.append(line)
++            lines.append(f'{table}.{column}: {_compact_domain_values(values)}')
+             remaining -= len(line) + 1
+     if not lines:
+         return ''
+     return (
+-        '\nStored text values (data only; match question wording to exact values in filters and CASE):\n'
++        '\nStored text (data only; use exact strings in filters and CASE):\n'
+         + '\n'.join(lines) + '\n'
+     )
+ 

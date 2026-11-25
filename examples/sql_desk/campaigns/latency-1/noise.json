@@ -1,0 +1,31 @@
+{
+  "decision": "inconclusive",
+  "reasons": [
+    "latency_p95 changes by -0.37 to +0.07, which does not establish a decrease; keep the base",
+    "success holds: +0.000 to +0.000, no lower than -0.02"
+  ],
+  "delta": {
+    "success": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "cost_per_task": [
+      2.8703703703703096e-06,
+      -5.648148148148071e-06,
+      1.185185185185165e-05
+    ],
+    "latency_p95": [
+      -0.3146779159978905,
+      -0.36658475099829957,
+      0.07033862500247778
+    ],
+    "tokens_per_task": [
+      0.2870370370370665,
+      -0.5648148148147811,
+      1.1851851851851052
+    ]
+  },
+  "episodes": 108,
+  "seconds": 39.1
+}

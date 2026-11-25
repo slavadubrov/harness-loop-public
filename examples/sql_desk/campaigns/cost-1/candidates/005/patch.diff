@@ -1,0 +1,17 @@
+--- a/desk.py
++++ b/desk.py
+@@ -39,7 +39,13 @@
+             label = _CONSTRAINT_LABELS[constraint]
+             used[label] = constraint
+             return label
+-        return '\n' if match.lastgroup == 'table' else ' '
++        if match.lastgroup == 'table':
++            return '\n'
++        # Parentheses delimit tokens without spaces; keep quoted text and
++        # comments untouched via the verbatim branch above.
++        before = schema[match.start() - 1:match.start()]
++        after = schema[match.end():match.end() + 1]
++        return '' if before == '(' or after in ('(', ')') else ' '
+ 
+     compact = _SCHEMA_FORMAT.sub(render, schema).strip()
+     if used:

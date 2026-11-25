@@ -1,0 +1,12 @@
+--- a/desk.py
++++ b/desk.py
+@@ -13,7 +13,8 @@
+ {domains}
+ Question: {question}
+ 
+-Reply with the SQL only."""
++Reply with concise SQL only, without Markdown or comments. Use short aliases where
++needed and omit aliases used only as display labels unless the question requests them."""
+ 
+ _IDENTIFIER = r'"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|[a-z_]\w*'
+ _TABLE = re.compile(rf'\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?({_IDENTIFIER})\s*\(', re.I)

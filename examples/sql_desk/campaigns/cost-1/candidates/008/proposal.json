@@ -1,0 +1,33 @@
+{
+  "id": "008",
+  "parent": "007",
+  "decision": "",
+  "reasons": [],
+  "note": "I shortened the schema sent to the model by replacing repeated plain `TEXT` declarations with one legend, but only when all parsed columns have explicit types and enough declarations can be omitted to offset the legend. The database queries and stored-value hints are unchanged. The baseline passed all 24 development tasks, so this targets input-token cost rather than a known correctness failure; the savings have not been measured.\n",
+  "files": [
+    {
+      "path": "desk.py",
+      "added": 48,
+      "removed": 6
+    }
+  ],
+  "tree": "202c37315681",
+  "improver": {
+    "note": "",
+    "cost_usd": 0.081463,
+    "seconds": 91.37552820799829,
+    "model": "gpt-6.2-sol",
+    "denied": [],
+    "error": null
+  },
+  "dev": null,
+  "val": null,
+  "delta": null,
+  "eval": {
+    "episodes": 0,
+    "cost_usd": 0.0,
+    "unknown_cost": 0,
+    "seconds": 0.0
+  },
+  "at": "2026-11-25T14:56:53+00:00"
+}

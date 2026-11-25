@@ -1,0 +1,1 @@
+I shortened stored-text hints by omitting the table prefix when a simple column name appears only once in the schema. Repeated names stay qualified, and the same exact values are included under the same budget. The development baseline passed all 24 tasks, so this targets input-token cost rather than a known correctness failure. The cost and success impact have not been measured.

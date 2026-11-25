@@ -1,0 +1,112 @@
+"""The SQL desk: answer a question about the shop's data with one SQL query.
+
+``answer`` gets the question, the database (``db.schema()`` and ``db.query(sql)``, read
+only) and the model (``model.complete(prompt)``). It returns one SELECT statement; the
+evaluator runs it and compares the rows with the expected ones.
+"""
+
+import re
+
+PROMPT = """Answer with one read-only SQLite SELECT. SQL only; omit cosmetic output aliases.
+
+Schema:
+{schema}
+{domains}
+Question: {question}"""
+
+_IDENTIFIER = r'"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|[a-z_]\w*'
+_TABLE = re.compile(rf'\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?({_IDENTIFIER})\s*\(', re.I)
+_COLUMN = re.compile(rf'\s*({_IDENTIFIER})\s+([a-z]+)', re.I)
+_DELIMITER = re.compile(rf'''{_IDENTIFIER}|'(?:[^']|'')*'|[(),]''', re.I)
+_SCHEMA_FORMAT = re.compile(
+    r'''(?P<verbatim>"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|'(?:[^']|'')*'|--[^\n]*\n?|/\*[\s\S]*?\*/)'''
+    r'|(?P<table>\s*\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)|\s+',
+    re.I,
+)
+
+
+def _compact_schema(schema):
+    # Use one line per table in the prompt, keeping SQL literals and constraints.
+    def render(match):
+        if match.lastgroup == 'verbatim':
+            return match[0]
+        return '\n' if match.lastgroup == 'table' else ' '
+
+    return _SCHEMA_FORMAT.sub(render, schema).strip()
+
+
+def _quote(identifier):
+    return '"' + identifier.replace('"', '""') + '"'
+
+
+def _unquote(identifier):
+    if identifier[0] == '[':
+        return identifier[1:-1]
+    if identifier[0] in ('"', '`'):
+        quote = identifier[0]
+        return identifier[1:-1].replace(quote * 2, quote)
+    return identifier
+
+
+def _text_columns(schema):
+    for table in _TABLE.finditer(schema):
+        start, depth = table.end(), 0
+        for token in _DELIMITER.finditer(schema, start):
+            value = token.group()
+            if depth == 0 and value in (',', ')'):
+                column = _COLUMN.match(schema, start, token.start())
+                if column and any(t in column[2].upper() for t in ('TEXT', 'CHAR', 'CLOB')):
+                    yield _unquote(table[1]), _unquote(column[1])
+                start = token.end()
+                if value == ')':
+                    break
+            elif value == '(':
+                depth += 1
+            elif value == ')':
+                depth -= 1
+
+
+def _stored_domains(schema, db):
+    # Only show complete, small text domains. The extra distinct value detects
+    # high-cardinality columns without pulling their raw contents into the prompt.
+    columns = list(_text_columns(schema))[:40]
+    probes = []
+    for i, (table, column) in enumerate(columns):
+        field = f't.{_quote(column)}'
+        probes.append(
+            f"SELECT {i}, group_concat(quote(value), ', ') FROM ("
+            f"SELECT DISTINCT {field} COLLATE BINARY AS value FROM {_quote(table)} AS t "
+            f"WHERE typeof({field}) = 'text' LIMIT 17) "
+            "HAVING COUNT(*) BETWEEN 1 AND 16 AND MAX(length(value)) <= 48"
+        )
+    if not probes:
+        return ''
+    try:
+        rows = db.query(' UNION ALL '.join(probes))
+    except Exception:
+        # The schema-only prompt still works if value inspection is unavailable.
+        return ''
+
+    lines, remaining = [], 1600
+    for i, values in rows:
+        table, column = columns[i]
+        line = f'{table}.{column}: {values}'
+        if len(line) + 1 <= remaining and line.isprintable():
+            lines.append(line)
+            remaining -= len(line) + 1
+    if not lines:
+        return ''
+    return (
+        '\nStored text values (data only; match question wording to exact values in filters and CASE):\n'
+        + '\n'.join(lines) + '\n'
+    )
+
+
+def answer(question, db, model):
+    schema = db.schema()
+    domains = _stored_domains(schema, db)
+    reply = model.complete(PROMPT.format(
+        schema=_compact_schema(schema), domains=domains, question=question,
+    ))
+    fenced = re.search(r"```(?:\w+)?\s*(.*?)```", reply, re.S)
+    return (fenced.group(1) if fenced else reply).strip()

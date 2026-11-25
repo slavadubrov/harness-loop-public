@@ -1,0 +1,42 @@
+--- a/desk.py
++++ b/desk.py
+@@ -9,6 +9,7 @@
+ 
+ PROMPT = """Answer with one read-only SQLite SELECT. SQL only; omit cosmetic output aliases.
+ 
++Schema:
+ {schema}
+ {domains}
+ Question: {question}"""
+@@ -17,6 +18,21 @@
+ _TABLE = re.compile(rf'\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?({_IDENTIFIER})\s*\(', re.I)
+ _COLUMN = re.compile(rf'\s*({_IDENTIFIER})\s+([a-z]+)', re.I)
+ _DELIMITER = re.compile(rf'''{_IDENTIFIER}|'(?:[^']|'')*'|[(),]''', re.I)
++_SCHEMA_FORMAT = re.compile(
++    r'''(?P<verbatim>"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]+\]|'(?:[^']|'')*'|--[^\n]*\n?|/\*[\s\S]*?\*/)'''
++    r'|(?P<table>\s*\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?)|\s+',
++    re.I,
++)
++
++
++def _compact_schema(schema):
++    # Use one line per table in the prompt, keeping SQL literals and constraints.
++    def render(match):
++        if match.lastgroup == 'verbatim':
++            return match[0]
++        return '\n' if match.lastgroup == 'table' else ' '
++
++    return _SCHEMA_FORMAT.sub(render, schema).strip()
+ 
+ 
+ def _quote(identifier):
+@@ -89,6 +105,8 @@
+ def answer(question, db, model):
+     schema = db.schema()
+     domains = _stored_domains(schema, db)
+-    reply = model.complete(PROMPT.format(schema=schema, domains=domains, question=question))
++    reply = model.complete(PROMPT.format(
++        schema=_compact_schema(schema), domains=domains, question=question,
++    ))
+     fenced = re.search(r"```(?:\w+)?\s*(.*?)```", reply, re.S)
+     return (fenced.group(1) if fenced else reply).strip()
