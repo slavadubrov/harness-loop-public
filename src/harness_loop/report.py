@@ -11,9 +11,10 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from harness_evals import UseCase, compare, comparison, summarize, table
+from harness_evals import UseCase, comparable, compare, comparison, frontier_svg, summarize, table
+from harness_evals.metrics import coordinate
 
-from harness_loop.loop import BASES, _spent, read_ledger, saved_episodes
+from harness_loop.loop import BASES, _spent, non_dominated, read_ledger, saved_episodes, screened
 
 MARK = {
     "seed": "start",
@@ -32,6 +33,7 @@ def regrade(usecase: UseCase, out: Path | str) -> dict[str, Any]:
     out = Path(out)
     config = json.loads((out / "campaign.json").read_text())
     level = config["level"]
+    objective = config.get("objective", "success")  # older campaigns optimized success
     rows = read_ledger(out)
     tried = max(len(rows) - 1, 1)
 
@@ -59,15 +61,23 @@ def regrade(usecase: UseCase, out: Path | str) -> dict[str, Any]:
         elif "dev" in g:
             if parent not in grades:
                 raise ValueError(f"candidate {cid}: missing parent {parent}")
-            base_dev = grades[parent]["dev"]
-            if config["screen"] and entry["dev"]["success"] <= summarize(base_dev)["success"]:
+            base_dev = summarize(grades[parent]["dev"], usecase.metrics)
+            if config["screen"] and (why := screened(objective, entry["dev"], base_dev)):
                 entry["decision"] = "screened"
-                entry["reason"] = "development success did not exceed the parent's"
+                entry["reason"] = (
+                    "development success did not exceed the parent's"
+                    if objective == "success"
+                    else why
+                )
             elif "val" in g:
                 base_val, val = grades[parent]["val"], g["val"]
-                c = compare(usecase, base_val, val, step=True, level=level)
+                again_base = out / "candidates" / cid / "val-base"
+                if objective.startswith("latency"):  # the base ran again next to the candidate
+                    base_val = graded(again_base, parent, "val")
+                rule = {"step": True, "objective": objective}
+                c = compare(usecase, base_val, val, level=level, **rule)
                 entry["decision"], entry["comparison"] = c.decision, c
-                strict = compare(usecase, base_val, val, step=True, level=1 - (1 - level) / tried)
+                strict = compare(usecase, base_val, val, level=1 - (1 - level) / tried, **rule)
                 entry["strict"] = strict.decision
             else:
                 entry["decision"] = "unverified"
@@ -85,7 +95,8 @@ def regrade(usecase: UseCase, out: Path | str) -> dict[str, Any]:
     result_file = out / "result.json"
     recorded = json.loads(result_file.read_text()) if result_file.exists() else {}
     test_ids = {p.parent.name for p in (out / "test").glob("*/episodes.jsonl")}
-    if "test" in recorded and test_ids != {"000", recorded["final"]}:
+    members = {m["id"] for m in recorded.get("frontier", [])}
+    if "test" in recorded and test_ids != {"000", recorded["final"], *members}:
         raise ValueError("missing or unexpected final test runs")
     for cid in sorted(test_ids):
         test[cid] = graded(out / "test" / cid, cid, "test")
@@ -95,7 +106,9 @@ def regrade(usecase: UseCase, out: Path | str) -> dict[str, Any]:
         raise ValueError("missing episodes from the recorded noise check")
     if path.exists():  # the starting harness against itself on new samples
         again = graded(path.parent, "000", "val")
-        noise = compare(usecase, grades["000"]["val"], again, step=True, level=level)
+        noise = compare(
+            usecase, grades["000"]["val"], again, step=True, level=level, objective=objective
+        )
     result = {
         "config": config,
         "entries": entries,
@@ -113,6 +126,7 @@ def report(usecase: UseCase, out: Path | str) -> str:
     out = Path(out)
     r = regrade(usecase, out)
     config, entries = r["config"], r["entries"]
+    objective = config.get("objective", "success")
     tried = entries[1:]
     adopted = sum(e["row"]["decision"] == "adopt" for e in tried)
     replay_adopted = sum(e["decision"] == "adopt" and not e["off_path"] for e in tried)
@@ -136,7 +150,8 @@ def report(usecase: UseCase, out: Path | str) -> str:
         f"- Model held fixed: `{config['frozen'].get('model')}`",
         f"- Runs per task: {config['trials']['dev']} on development, {config['trials']['val']}"
         f" on validation, {config['trials']['test']} on test",
-        f"- Adoption rule: one step of a loop, intervals at {config['level']:.2%}",
+        f"- Adoption rule: one step of a loop, intervals at {config['level']:.2%}"
+        + (f"; objective `{objective}`" if objective != "success" else ""),
         f"- The campaign proposed {len(tried)} candidates and adopted {adopted}. "
         f"Regrading supports {replay_adopted} on the recorded path.",
         f"- Improver: ${spent['improver_usd']:.2f} known cost in"
@@ -198,16 +213,105 @@ def report(usecase: UseCase, out: Path | str) -> str:
         sums = {cid: summarize(gs, usecase.metrics) for cid, gs in r["test"].items()}
         lines += ["## Test tasks, scored once", "", table(sums, list(usecase.metrics)), ""]
         lines += [*_by_tag(usecase, r["test"]), ""]
-        if len(r["test"]) == 2:
-            first, final = list(r["test"].values())
-            lines += [
-                comparison(compare(usecase, first, final, step=True, level=config["level"])),
-                "",
-            ]
+        final = recorded.get("final")
+        if final != "000" and {"000", final} <= r["test"].keys():
+            rule = {"step": True, "level": config["level"], "objective": objective}
+            c = compare(usecase, r["test"]["000"], r["test"][final], **rule)
+            lines += [comparison(c), ""]
+    if "frontier" in recorded:
+        lines += _frontier(usecase, out, r, [m["id"] for m in recorded["frontier"]])
     text = "\n".join(lines)
     (out / "REPORT.md").write_text(text)
     (out / "trajectory.svg").write_text(trajectory_svg(entries))
     return text
+
+
+def _frontier(usecase: UseCase, out: Path, r: dict[str, Any], members: list[str]) -> list[str]:
+    """The frontier section of a campaign's report, and its two figures."""
+    val = {e["row"]["id"]: e["val"] for e in r["entries"] if "val" in e}
+    test = {cid: summarize(r["test"][cid], usecase.metrics) for cid in members}
+    figures(test, out)
+    cols = ["success", "$ per task", "p95 latency, s", "tokens per task"]
+    head = [f"Validation {c}" for c in cols] + [f"Test {c}" for c in cols]
+    return [
+        "## The frontier",
+        "",
+        "The start and the candidates scored on validation that miss no gate the start clears"
+        " and add no critical violation. Of those, these are the ones that no other beats on"
+        " validation success, cost per task and p95 latency at once. Each was scored on the"
+        " test tasks.",
+        "",
+        "| Candidate | " + " | ".join(head) + " |",
+        "|---" * 9 + "|",
+        *(
+            f"| {cid} | " + " | ".join(_cells(val[cid]) + _cells(test[cid])) + " |"
+            for cid in members
+        ),
+        "",
+        "![Test success against cost per task](frontier-cost.svg)",
+        "![Test success against p95 latency](frontier-latency.svg)",
+        "",
+    ]
+
+
+def _cells(s: dict[str, Any]) -> list[str]:
+    """Success, cost per task, p95 latency and tokens per task, as table cells."""
+    cost, latency, tokens = (
+        coordinate(s, m) for m in ("cost_per_task", "latency_p95", "tokens_per_task")
+    )
+    return [
+        f"{s['success']:.2f}",
+        "unknown" if cost is None else f"${cost:.5f}",
+        "unknown" if latency is None else f"{latency:.2f}",
+        "unknown" if tokens is None else f"{tokens:.0f}",
+    ]
+
+
+def figures(summaries: dict[str, dict[str, Any]], out: Path) -> None:
+    """Write success against cost per task and against p95 latency as two SVG files."""
+    out.mkdir(parents=True, exist_ok=True)
+    for name, x in (("cost", "cost_per_task"), ("latency", "latency_p95")):
+        (out / f"frontier-{name}.svg").write_text(frontier_svg(summaries, x, "success"))
+
+
+def across(
+    usecase: UseCase, folders: list[Path], split: str = "test"
+) -> tuple[str, dict[str, dict[str, Any]]]:
+    """Every harness with saved runs on ``split`` in several campaigns of one target, as
+    a table that marks the harnesses no other beats on success, cost per task and p95
+    latency. Campaigns must share the frozen setup and the task fingerprints. A harness
+    that several campaigns ran, by its files, appears once, with the first campaign's runs.
+    Returns the table and the summaries; makes no model calls."""
+    sums: dict[str, dict[str, Any]] = {}
+    seen: dict[str, str] = {}  # tree id -> label
+    reference = None
+    for out in folders:
+        config = json.loads((out / "campaign.json").read_text())
+        for row in read_ledger(out):
+            cid = row["id"]
+            folder = out / "test" / cid if split == "test" else out / "candidates" / cid / split
+            if not (folder / "episodes.jsonl").exists() or row["tree"] in seen:
+                continue
+            manifest = json.loads((folder / "manifest.json").read_text())
+            if reference is not None:
+                comparable(reference, manifest)
+            reference = manifest
+            label = f"{out.name}/{cid}"
+            seen[row["tree"]] = label
+            episodes = saved_episodes(folder, cid, split, config, usecase)
+            sums[label] = summarize(usecase.grade(episodes), usecase.metrics)
+    if not sums:
+        raise ValueError(f"no saved runs on {split}")
+    front = non_dominated(sums)
+    lines = [
+        "| Harness | Tree | Success | $ per task | p95 latency, s | Tokens per task | Frontier |",
+        "|---" * 7 + "|",
+    ]
+    tree = {label: t for t, label in seen.items()}
+    for label, s in sums.items():
+        mark = "yes" if label in front else ""
+        lines.append(f"| {label} | {tree[label]} | " + " | ".join(_cells(s)) + f" | {mark} |")
+    return "\n".join(lines), sums
 
 
 def _noise(c: Any) -> list[str]:

@@ -1,7 +1,9 @@
 """harness-loop run|report|show module:TARGET folder
+harness-loop frontier module:TARGET folder [folder ...] [--split val|test] [--out DIR]
 
 ``run`` starts or resumes a campaign, ``report`` rebuilds REPORT.md and trajectory.svg
-from the saved runs, and ``show`` prints the ledger or one candidate.
+from the saved runs, ``show`` prints the ledger or one candidate, and ``frontier``
+compares the saved runs of several campaigns of one target.
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from pathlib import Path
 
 from harness_loop.improvers import claude_code, command, openai_agent
 from harness_loop.loop import Target, campaign, read_ledger
-from harness_loop.report import MARK, report
+from harness_loop.report import MARK, across, figures, report
 
 
 def _target(ref: str) -> Target:
@@ -31,6 +33,10 @@ def _target(ref: str) -> Target:
 
 
 def main(argv: list[str] | None = None) -> None:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["frontier"]:
+        _frontier(argv[1:])
+        return
     p = argparse.ArgumentParser(prog="harness-loop")
     p.add_argument("command", choices=["run", "report", "show"])
     p.add_argument("target", help="module:attribute of a Target; for show, any text")
@@ -54,6 +60,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--no-noise", action="store_true", help="skip the starting harness's second run")
     p.add_argument("--no-feedback", action="store_true", help="a control: show no run results")
     p.add_argument("--no-test", action="store_true", help="leave the test tasks unscored")
+    p.add_argument("--objective", default="success", help="run: the metric a step improves")
+    p.add_argument("--seed", type=Path, help="run: start from this harness directory")
+    p.add_argument("--frontier", action="store_true", help="run: score the frontier on test")
     a = p.parse_args(argv)
     if a.command == "show":
         _show(a.out, a.candidate)
@@ -82,12 +91,32 @@ def main(argv: list[str] | None = None) -> None:
             noise=not a.no_noise,
             feedback=not a.no_feedback,
             test=not a.no_test,
+            objective=a.objective,
+            seed=a.seed,
+            frontier=a.frontier,
             trials={
                 k: int(v) for k, v in (kv.split("=") for kv in (a.trials or "").split(",") if kv)
             },
         )
         print(f"Stopped: {result['stopped']}. Final harness: candidate {result['final']}.")
     print(report(target.usecase, a.out))
+
+
+def _frontier(argv: list[str]) -> None:
+    p = argparse.ArgumentParser(prog="harness-loop frontier")
+    p.add_argument("target", help="module:attribute of a Target")
+    p.add_argument("folders", nargs="+", type=Path, help="campaign folders of that target")
+    p.add_argument("--split", choices=["val", "test"], default="test")
+    p.add_argument("--out", type=Path, help="write frontier-cost.svg and frontier-latency.svg")
+    a = p.parse_args(argv)
+    usecase = _target(a.target).usecase
+    try:
+        text, summaries = across(usecase, a.folders, a.split)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(f"harness-loop frontier: {exc}") from None
+    print(text)
+    if a.out:
+        figures(summaries, a.out)
 
 
 def _show(out: Path, cid: str | None) -> None:

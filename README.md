@@ -47,6 +47,73 @@ A campaign whose noise check gets any other answer stops before its first step. 
 rule's two conditions beyond the interval, higher success only and a sign test over the
 tasks that changed, both come from pairs this check found.
 
+## Objectives: success, cost or latency
+
+By default each step must raise success. `campaign(..., objective="cost_per_task")`, or
+`--objective cost_per_task`, makes each step lower another metric instead:
+`cost_per_task`, `latency_p50`, `latency_p95`, `calls_per_task`, `tokens_per_task`, or a
+guardrail metric where lower is better. The campaign records the objective in
+`campaign.json`, and a resumed campaign must use the same one.
+
+- The improver's `TASK.md` names the metric to lower and says that success, critical
+  violations and the guardrails must hold.
+- The development screen drops a candidate unless its development value of the objective
+  is lower than the base's and its development success is not lower.
+- `harness_evals.compare(..., step=True, objective=...)` decides on validation. It adopts
+  only if the whole interval of the objective is below zero, and success holds within the
+  use case's `margin`.
+- The noise check compares the starting harness with itself under the same objective.
+  Two runs of one harness differ in cost and latency by sampling alone.
+- The stop "no development task fails" applies to success only. A cost campaign stops on
+  `max_candidates`, `patience` or `max_usd`.
+
+Latency depends on the provider's load at the time of the run. With a latency objective,
+the base runs on the validation tasks again right after each candidate, into
+`candidates/<id>/val-base/`, and the comparison uses that run. This doubles the
+validation runs of each step that reaches validation. The other objectives reuse the
+base's saved validation runs.
+
+`seed=Path(...)`, or `--seed DIR`, starts a campaign from another harness directory than
+`Target.seed`, such as the kept harness of an earlier campaign. `campaign.json` records
+its tree id and its directory.
+
+```bash
+harness-loop run my_target:TARGET runs/cheaper --objective cost_per_task --seed runs/first/candidates/003/harness
+```
+
+## The frontier: harnesses no other beats
+
+One objective gives one final harness. `campaign(..., frontier=True)`, or `--frontier`,
+also lists the harnesses a person may choose between. After the loop stops, it takes the
+start and every candidate scored on validation that misses no gate the start clears and
+adds no critical violation. Of those it keeps each harness that no other beats on
+validation success, cost per task and p95 latency: a harness is dropped only if another
+is at least as good on all three and better on one. These are point estimates, as in
+`harness_evals.metrics.pareto`. Each member is scored on the test tasks, `result.json`
+lists them under `frontier`, and `REPORT.md` gets a table of their validation and test
+scores and two figures, `frontier-cost.svg` and `frontier-latency.svg`. Without the flag,
+only the start and the final harness are scored on test.
+
+`harness-loop frontier` does the same across saved campaigns of one target, with no
+model calls. It requires the same frozen setup and task fingerprints in every campaign,
+counts a harness that several campaigns ran once, by its tree id, and marks the
+harnesses no other beats. `--split val` reads the validation runs instead of the test
+runs, and `--out DIR` writes the two figures.
+
+```bash
+uv run harness-loop frontier examples.sql_desk.target:TARGET examples/sql_desk/campaigns/run-1 examples/sql_desk/campaigns/run-2 examples/sql_desk/campaigns/no-feedback-1 examples/sql_desk/campaigns/no-feedback-2 --split test
+```
+
+| Harness | Tree | Success | $ per task | p95 latency, s | Tokens per task | Frontier |
+|---|---|---|---|---|---|---|
+| run-1/000 | 8f98ba16d651 | 0.58 | $0.00130 | 3.04 | 414 | yes |
+| run-1/002 | 3ea1a583dd85 | 0.90 | $0.00151 | 3.94 | 506 | yes |
+| run-2/001 | eba8e62509ad | 1.00 | $0.00187 | 3.29 | 650 | yes |
+
+On these test runs the start is the cheapest and the fastest, and `run-2/001` is the
+most successful. `run-1/002` is cheaper than `run-2/001` and more successful than the
+start.
+
 ## An example that replays offline: the SQL desk
 
 [`examples/sql_desk/`](examples/sql_desk/) is a complete target. Its harness answers a
@@ -164,6 +231,7 @@ harness-loop run my_target:TARGET runs/first --backend openai --model gpt-6.2-so
 harness-loop show - runs/first            # the ledger, one line per candidate
 harness-loop show - runs/first 003        # one candidate: decision, note and diff
 harness-loop report my_target:TARGET runs/first   # rebuild REPORT.md and trajectory.svg
+harness-loop frontier my_target:TARGET runs/first runs/cheaper --out runs/frontier
 ```
 
 Run the same campaign command again after an interruption. Completed splits and recorded
@@ -223,6 +291,7 @@ runs/first/
   noise.json               the rule's answer on the starting harness against itself
   test/000/, test/003/     the starting and the final harness on the test tasks
   result.json, REPORT.md, trajectory.svg
+  frontier-*.svg           with --frontier: success against cost and against latency
 ```
 
 ## Improvers
@@ -258,7 +327,9 @@ code.
 - The sandbox covers what the improver reads and writes while it proposes. A candidate's
   code runs with your adapter's permissions: run untrusted candidates in a container.
 - The base's validation runs are reused for later comparisons, so the two sides of a
-  comparison ran at different times.
+  comparison ran at different times. A latency objective runs the base again instead.
+- The frontier uses point estimates. Harnesses whose intervals overlap may change places
+  in another sample.
 
 ## Development
 
