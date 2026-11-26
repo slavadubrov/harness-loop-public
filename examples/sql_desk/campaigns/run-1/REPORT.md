@@ -20,7 +20,7 @@ Development screens and validation decisions are recomputed from saved runs. A d
 |---|---|---|---|---|---|---|
 | 000 |  | 0.68 | 0.77 (0.62–0.89) |  | start | the starting harness |
 | 001 | 000 | 0.00 | not run |  | screened on dev | development success did not exceed the parent's |
-| 002 | 000 | 1.00 | 0.98 (0.94–1.00) | +0.21 (+0.09 to +0.35) | adopted | success is higher: +0.093 to +0.352 |
+| 002 | 000 | 1.00 | 0.98 (0.94–1.00) | +0.21 (+0.09 to +0.35) | adopted | success is higher by +0.213 (interval +0.093 to +0.352): 9 tasks better, 0 worse, p < 0.001 |
 
 ## What each candidate changed
 
@@ -46,4 +46,4 @@ Files: `desk.py` (+96 −2). Diff: `candidates/002/patch.diff`.
 **002** against **000** on 36 tasks: success +0.315 (+0.167 to +0.463).
 Better on 13 tasks, worse on 0 tasks.
 Candidate minus base: cost_per_task +0.00021 (+0.00012 to +0.00032); latency_p50 +0.01 (-0.10 to +0.37); latency_p95 +0.90 (+0.77 to +1.42); calls_per_task +0.34 (+0.19 to +0.49); tokens_per_task +92 (+52 to +137); valid sql +0.00 (+0.00 to +0.00).
-Decision: **adopt**. success is higher: +0.167 to +0.463
+Decision: **adopt**. success is higher by +0.315 (interval +0.167 to +0.463): 13 tasks better, 0 worse, p < 0.001
