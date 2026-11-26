@@ -7,7 +7,7 @@ license = "MIT"
 requires-python = ">=3.12"
 # PyPI has a different package named harness-evals.
 dependencies = [
-    "harness-evals @ git+https://github.com/slavadubrov/harness-evals@c11693c0ea7bdd29bb9854f3e5811116e1e76d31",
+    "harness-evals @ git+https://github.com/slavadubrov/harness-evals@9f67256961ee5d08155ea1f3158c393b361fdd88",
 ]
 
 [project.scripts]

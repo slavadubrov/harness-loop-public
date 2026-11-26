@@ -21,7 +21,7 @@ Development screens and validation decisions are recomputed from saved runs. A d
 | 000 |  | 0.67 | 0.77 (0.62–0.89) |  | start | the starting harness |
 | 001 | 000 | 0.00 | not run |  | screened on dev | development success did not exceed the parent's |
 | 002 | 000 | 0.68 | 0.77 (0.62–0.89) | +0.00 (+0.00 to +0.00) | inconclusive | success difference +0.000 to +0.000 does not establish a benefit; keep the base |
-| 003 | 000 | 0.68 | 0.75 (0.58–0.89) | -0.02 (-0.06 to +0.00) | rejected (ledger: inconclusive) | 1 of 36 tasks pass less often than with the base by more than 0.5; keep the base |
+| 003 | 000 | 0.68 | 0.75 (0.58–0.89) | -0.02 (-0.06 to +0.00) | inconclusive | success difference -0.056 to +0.000 does not establish a benefit; keep the base |
 
 ## What each candidate changed
 
@@ -31,7 +31,7 @@ Files: `desk.py` (+74 −3). Diff: `candidates/001/patch.diff`.
 **002** (inconclusive). The harness now checks each generated SELECT with a read-only `LIMIT 0` probe and makes one repair attempt only if the check fails. Giving the model SQLite’s error should help it fix malformed SQL, unknown tables or columns, and unsupported functions without adding a second model call for queries that pass. The probe checks whether SQLite can compile the query, not whether it answers the question correctly.
 Files: `desk.py` (+56 −4). Diff: `candidates/002/patch.diff`.
 
-**003** (rejected). I added a short checklist to the SQL prompt that asks the model to identify what each result row represents, return only the requested columns, check for double-counting across joins, preserve entities with no activity when requested, and apply ordering in the final query. This targets queries that run successfully but return the wrong rows, columns, or totals, without adding model calls or database probes.
+**003** (inconclusive). I added a short checklist to the SQL prompt that asks the model to identify what each result row represents, return only the requested columns, check for double-counting across joins, preserve entities with no activity when requested, and apply ordering in the final query. This targets queries that run successfully but return the wrong rows, columns, or totals, without adding model calls or database probes.
 Files: `desk.py` (+11 −1). Diff: `candidates/003/patch.diff`.
 
 ## Test tasks, scored once

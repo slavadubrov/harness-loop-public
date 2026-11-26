@@ -30,8 +30,8 @@ It is the companion code for Part 5 of the
    that cannot help costs no look at the validation tasks.
 4. **Decide on validation tasks.** `harness_evals.compare(..., step=True)` pairs the
    candidate with the current harness task by task. The candidate is rejected if any
-   task's pass rate falls by more than 0.5: with 3 runs, from 3 of 3 to 1 of 3 or 0 of 3.
-   It is kept only if it passes more validation runs than the current harness, an exact
+   task loses more runs than run noise explains, by a one-sided Fisher exact test on that
+   task's runs: with 3 runs, only a fall from 3 of 3 to 0 of 3. It is kept only if it passes more validation runs than the current harness, an exact
    permutation test over the runs shows that the gain is larger than the difference
    between repeated runs, and no guardrail breaks. The success interval over tasks is
    reported but does not decide a step.
@@ -48,15 +48,13 @@ harness differ by noise alone, so the rule must answer "inconclusive". If it ado
 gain test is too easy to satisfy on these tasks. If it rejects, a task's pass rate varies
 so much between runs that the broken-task check fires on noise. Either way, add tasks or
 runs before trusting the rule. A campaign whose noise check gets any other answer stops
-before its first step. Tasks that pass about half of their runs make a reject likely: in
-a harness-evals simulation of 32 tasks with pass probabilities drawn from 0 to 1 and 3
-runs per task, noise alone broke a task in 87% of pairs.
+before its first step. Tasks that pass about half of their runs make a reject more
+likely: in a harness-evals simulation of 32 tasks with pass probabilities drawn from 0 to
+1 and 3 runs per task, noise alone broke a task in 20% of pairs. If the noise check
+rejects, add runs per task, or remove tasks that pass about half of their runs.
 
 The six saved SQL desk campaigns pass the noise check under the current rule, and
-regrading them keeps the same candidates. One decision differs from its ledger:
-`no-feedback-2` candidate 003 fails one validation question in all 3 runs where the
-start passed 2 of 3, so the rule now rejects it; the ledger says inconclusive. Its
-`REPORT.md` marks it "rejected (ledger: inconclusive)".
+regrading them gives the decisions recorded in their ledgers.
 
 ## Objectives: success, cost or latency
 
@@ -359,8 +357,8 @@ code.
 - A step is decided on your validation tasks and their runs. Tasks that pass only some
   of their runs add to the difference between repeated runs, so with many such tasks
   only a larger gain is kept; smaller gains end as inconclusive. Such a task can also
-  lose two of three runs by chance, and one broken task rejects the step. Add runs per
-  task when the noise check rejects.
+  lose all its runs by chance, and one broken task rejects the step. Add runs per task
+  when the noise check rejects.
 - Every kept change was chosen because it scored well on the validation tasks, so the
   final harness's validation score is optimistic. Read the test score.
 - The loop makes several decisions on the same validation tasks. `level` tightens each
