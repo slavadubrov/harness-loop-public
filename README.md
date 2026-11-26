@@ -29,11 +29,12 @@ It is the companion code for Part 5 of the
    than the current harness is dropped. Its validation runs are skipped, so a change
    that cannot help costs no look at the validation tasks.
 4. **Decide on validation tasks.** `harness_evals.compare(..., step=True)` pairs the
-   candidate with the current harness task by task. The candidate is kept only if the
-   whole interval of the success difference is above zero, a Wilcoxon signed-rank test
-   over the tasks that changed favours the candidate, and no guardrail breaks. The test
-   ranks the changed tasks by the size of the change and compares the rank sum of the
-   gains with the rank sum of the losses.
+   candidate with the current harness task by task. The candidate is rejected if any
+   task loses more runs than run noise explains, by a one-sided Fisher exact test on that
+   task's runs: with 3 runs, only a fall from 3 of 3 to 0 of 3. It is kept only if it passes more validation runs than the current harness, an exact
+   permutation test over the runs shows that the gain is larger than the difference
+   between repeated runs, and no guardrail breaks. The success interval over tasks is
+   reported but does not decide a step.
 5. **Record.** The ledger gets the note, the diff, the scores, the decision and its
    reasons, the improver's cost and the evaluation's cost.
 
@@ -43,15 +44,17 @@ starting harness and the final one are scored once on the test tasks.
 
 Before the first step, the starting harness runs on the validation tasks a second time
 with new samples, and the pair goes through the same rule (`noise.json`). Two runs of one
-harness differ by noise alone, so the rule must answer "inconclusive". If it adopts or
-rejects, it is too easy to satisfy on these tasks: add tasks or runs before trusting it.
-A campaign whose noise check gets any other answer stops before its first step. The
-rule's two conditions beyond the interval, higher success only and a test over the
-tasks that changed, both come from pairs this check found. Up to harness-evals 0.7.0
-that test was a sign test, which counts a task that lost one run of three the same as a
-task that now fails every run. From 0.8.0 it is the Wilcoxon signed-rank test. The six
-saved SQL desk campaigns ran under the sign test; their ledgers keep the reasons written
-then, and regrading them under the Wilcoxon test gives the same decisions.
+harness differ by noise alone, so the rule must answer "inconclusive". If it adopts, the
+gain test is too easy to satisfy on these tasks. If it rejects, a task's pass rate varies
+so much between runs that the broken-task check fires on noise. Either way, add tasks or
+runs before trusting the rule. A campaign whose noise check gets any other answer stops
+before its first step. Tasks that pass about half of their runs make a reject more
+likely: in a harness-evals simulation of 32 tasks with pass probabilities drawn from 0 to
+1 and 3 runs per task, noise alone broke a task in 20% of pairs. If the noise check
+rejects, add runs per task, or remove tasks that pass about half of their runs.
+
+The six saved SQL desk campaigns pass the noise check under the current rule, and
+regrading them gives the decisions recorded in their ledgers.
 
 ## Objectives: success, cost or latency
 
@@ -351,10 +354,11 @@ code.
 
 ## Limits
 
-- The adoption rule's intervals come from your validation tasks. With a few dozen tasks
-  only a change that fixes several of them can be kept: when no task gets worse, the
-  Wilcoxon test needs at least six tasks to improve. Smaller gains end as inconclusive.
-  That is the rule working, and a reason to write more tasks.
+- A step is decided on your validation tasks and their runs. Tasks that pass only some
+  of their runs add to the difference between repeated runs, so with many such tasks
+  only a larger gain is kept; smaller gains end as inconclusive. Such a task can also
+  lose all its runs by chance, and one broken task rejects the step. Add runs per task
+  when the noise check rejects.
 - Every kept change was chosen because it scored well on the validation tasks, so the
   final harness's validation score is optimistic. Read the test score.
 - The loop makes several decisions on the same validation tasks. `level` tightens each

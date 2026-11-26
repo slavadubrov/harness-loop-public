@@ -208,7 +208,8 @@ def campaign(
     ``noise`` runs the starting harness on the validation tasks a second time, with new
     samples, and puts the pair through the adoption rule (``<out>/noise.json``). Two runs
     of one harness differ by noise only, so any decision but "inconclusive" says the rule
-    is too easy to satisfy on these tasks, and the campaign stops before its first step.
+    does not separate change from noise on these tasks, and the campaign stops before its
+    first step.
     ``feedback=False`` is a control: the improver gets the harness and the notes of
     earlier candidates, and no result of any run.
 

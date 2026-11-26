@@ -20,7 +20,7 @@ Development screens and validation decisions are recomputed from saved runs. A d
 |---|---|---|---|---|---|---|
 | 000 |  | 0.67 | 0.77 (0.62–0.89) |  | start | the starting harness |
 | 001 | 000 | 0.00 | not run |  | screened on dev | development success did not exceed the parent's |
-| 002 | 000 | 0.68 | 0.77 (0.62–0.89) | +0.00 (+0.00 to +0.00) | inconclusive | a zero-width success interval does not establish the allowed loss; keep the base |
+| 002 | 000 | 0.68 | 0.77 (0.62–0.89) | +0.00 (+0.00 to +0.00) | inconclusive | success difference +0.000 to +0.000 does not establish a benefit; keep the base |
 | 003 | 000 | 0.68 | 0.75 (0.58–0.89) | -0.02 (-0.06 to +0.00) | inconclusive | success difference -0.056 to +0.000 does not establish a benefit; keep the base |
 
 ## What each candidate changed
